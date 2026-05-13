@@ -1,0 +1,128 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --paper: #faf7f2;
+  --paper-deep: #f1ece0;
+  --ink: #1a1815;
+  --ink-soft: #4a463f;
+  --ink-muted: #7a7468;
+  --rule: #e5dfd3;
+  --ember: #c2410c;
+  --ember-soft: #e8845a;
+  --noise:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.045 0'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='0.6'/></svg>");
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-ember: var(--ember);
+  --color-ember-soft: var(--ember-soft);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  background-color: var(--paper);
+  background-image: var(--noise);
+  background-repeat: repeat;
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background-color: var(--ember);
+  color: var(--paper);
+}
+
+/* Resize handle */
+.resize-handle {
+  position: relative;
+  width: 1px;
+  background-color: var(--rule);
+  transition: background-color 120ms ease-out, width 120ms ease-out;
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 -6px;
+}
+.resize-handle:hover,
+.resize-handle:active {
+  background-color: var(--ember);
+  width: 3px;
+}
+.resize-handle:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 4px;
+}
+
+/* Preview prose tuning */
+.prose-paper {
+  --tw-prose-body: var(--ink-soft);
+  --tw-prose-headings: var(--ink);
+  --tw-prose-links: var(--ember);
+  --tw-prose-bold: var(--ink);
+  --tw-prose-quotes: var(--ink-soft);
+  --tw-prose-quote-borders: var(--ember);
+  --tw-prose-code: var(--ink);
+  --tw-prose-pre-bg: var(--paper-deep);
+  --tw-prose-pre-code: var(--ink);
+  --tw-prose-hr: var(--rule);
+  --tw-prose-th-borders: var(--rule);
+  --tw-prose-td-borders: var(--rule);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+.prose-paper :is(h1, h2, h3, h4) {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.prose-paper code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.88em;
+  background-color: var(--paper-deep);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+.prose-paper code::before,
+.prose-paper code::after {
+  content: none;
+}
+.prose-paper pre {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.prose-paper pre code {
+  background-color: transparent;
+  padding: 0;
+}
+.prose-paper blockquote {
+  font-style: italic;
+  border-left-width: 2px;
+}
+.prose-paper a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.prose-paper table {
+  font-size: 0.92em;
+}
+.prose-paper input[type="checkbox"] {
+  accent-color: var(--ember);
+  margin-right: 0.5em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

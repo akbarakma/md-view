@@ -1,0 +1,181 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
+
+type TopBarProps = {
+  drawerOpen: boolean;
+  onToggleDrawer: () => void;
+  toggleId: string;
+  drawerId: string;
+  onImport: (text: string, filename: string) => void;
+  onExport: () => void;
+  onCopy: () => Promise<boolean> | boolean;
+};
+
+export function TopBar({
+  drawerOpen,
+  onToggleDrawer,
+  toggleId,
+  drawerId,
+  onImport,
+  onExport,
+  onCopy,
+}: TopBarProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      onImport(text, file.name);
+    };
+    reader.readAsText(file);
+    // Reset so re-selecting the same file fires onChange again
+    e.target.value = "";
+  };
+
+  const handleCopy = async () => {
+    const ok = await onCopy();
+    setCopyState(ok ? "ok" : "err");
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopyState("idle"), 1600);
+  };
+
+  return (
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-6">
+      <div className="flex items-baseline gap-3">
+        <span className="text-[20px] font-semibold leading-none tracking-tight text-ink">
+          Markdown
+        </span>
+        <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted">
+          Viewer
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={MD_ACCEPT}
+          className="hidden"
+          onChange={handleFileChange}
+          aria-hidden
+          tabIndex={-1}
+        />
+
+        <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Import">
+          <IconUpload />
+        </ToolbarButton>
+
+        <ToolbarButton onClick={onExport} label="Export">
+          <IconDownload />
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={handleCopy}
+          label={copyState === "ok" ? "Copied" : copyState === "err" ? "Copy failed" : "Copy"}
+          tone={copyState === "ok" ? "ember" : copyState === "err" ? "ember" : "default"}
+          aria-live="polite"
+        >
+          {copyState === "ok" ? <IconCheck /> : <IconCopy />}
+        </ToolbarButton>
+
+        <span aria-hidden className="mx-1 h-5 w-px bg-rule" />
+
+        <button
+          id={toggleId}
+          type="button"
+          onClick={onToggleDrawer}
+          aria-expanded={drawerOpen}
+          aria-controls={drawerId}
+          className="group inline-flex items-center gap-2 rounded-full border border-rule px-4 py-1.5 text-[12px] font-medium uppercase tracking-[0.18em] text-ink-soft transition-colors duration-150 ease-out hover:border-ember hover:text-ember focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember"
+        >
+          <span
+            aria-hidden
+            className="size-1.5 rounded-full bg-ink-muted transition-colors duration-150 group-hover:bg-ember"
+          />
+          Cheat sheet
+        </button>
+      </div>
+    </header>
+  );
+}
+
+type ToolbarButtonProps = {
+  onClick: () => void;
+  label: string;
+  tone?: "default" | "ember";
+  children: React.ReactNode;
+  "aria-live"?: "polite" | "off" | "assertive";
+};
+
+function ToolbarButton({
+  onClick,
+  label,
+  tone = "default",
+  children,
+  ...rest
+}: ToolbarButtonProps) {
+  const toneClass =
+    tone === "ember"
+      ? "border-ember text-ember"
+      : "border-rule text-ink-soft hover:border-ember hover:text-ember";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember ${toneClass}`}
+      {...rest}
+    >
+      <span aria-hidden className="grid size-3.5 place-items-center">
+        {children}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function IconUpload() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <path d="M7 11V3M7 3L3.5 6.5M7 3L10.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconDownload() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <path d="M7 3V11M7 11L3.5 7.5M7 11L10.5 7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconCopy() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <rect x="3" y="3" width="7" height="8" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 3V2.25A1.25 1.25 0 0 1 6.75 1H11a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconCheck() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <path d="M3 7.5L6 10.5L11 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
