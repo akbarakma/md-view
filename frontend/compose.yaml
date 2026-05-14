@@ -1,3 +1,5 @@
+name: md-view
+
 services:
   md-view:
     build:
@@ -8,7 +10,7 @@ services:
     restart: unless-stopped
     ports:
       # Bind to loopback only — reverse proxy (nginx/Caddy) on host terminates TLS
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3002:3000"
     environment:
       NODE_ENV: production
       PORT: "3000"
