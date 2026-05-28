@@ -7,7 +7,11 @@ import { MarkdownPreview } from "@/components/markdown-preview";
 import { PaneLabel } from "@/components/pane-label";
 import { SplitPane } from "@/components/split-pane";
 import { TopBar } from "@/components/top-bar";
+import { encodeShare } from "@/lib/share-url";
 import { usePersistedMd } from "@/lib/use-persisted-md";
+
+const SHARE_URL_LIMIT = 32_000;
+type ShareOutcome = "ok" | "too-large" | "failed";
 
 const DEFAULT_SAMPLE = `# A quieter Markdown viewer
 
@@ -88,6 +92,32 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [md]);
 
+  const handleShare = useCallback(async (): Promise<ShareOutcome> => {
+    const url = `${window.location.origin}${window.location.pathname}${encodeShare(md)}`;
+    if (url.length > SHARE_URL_LIMIT) return "too-large";
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        return "ok";
+      }
+    } catch {
+      // fall through to textarea fallback
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok ? "ok" : "failed";
+    } catch {
+      return "failed";
+    }
+  }, [md]);
+
   const handleCopy = useCallback(async (): Promise<boolean> => {
     try {
       if (navigator.clipboard?.writeText) {
@@ -122,6 +152,7 @@ export default function Home() {
         onImport={handleImport}
         onExport={handleExport}
         onCopy={handleCopy}
+        onShare={handleShare}
       />
       <main className="flex-1 overflow-hidden">
         <SplitPane

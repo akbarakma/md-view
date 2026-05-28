@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
 
+type ShareOutcome = "ok" | "too-large" | "failed";
+
 type TopBarProps = {
   drawerOpen: boolean;
   onToggleDrawer: () => void;
@@ -12,6 +14,7 @@ type TopBarProps = {
   onImport: (text: string, filename: string) => void;
   onExport: () => void;
   onCopy: () => Promise<boolean> | boolean;
+  onShare: () => Promise<ShareOutcome> | ShareOutcome;
 };
 
 export function TopBar({
@@ -22,14 +25,18 @@ export function TopBar({
   onImport,
   onExport,
   onCopy,
+  onShare,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
+  const [shareState, setShareState] = useState<"idle" | "ok" | "too-large" | "err">("idle");
   const copyTimerRef = useRef<number | null>(null);
+  const shareTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      if (shareTimerRef.current !== null) window.clearTimeout(shareTimerRef.current);
     };
   }, []);
 
@@ -52,6 +59,22 @@ export function TopBar({
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
     copyTimerRef.current = window.setTimeout(() => setCopyState("idle"), 1600);
   };
+
+  const handleShare = async () => {
+    const outcome = await onShare();
+    setShareState(outcome === "ok" ? "ok" : outcome === "too-large" ? "too-large" : "err");
+    if (shareTimerRef.current !== null) window.clearTimeout(shareTimerRef.current);
+    shareTimerRef.current = window.setTimeout(() => setShareState("idle"), 1600);
+  };
+
+  const shareLabel =
+    shareState === "ok"
+      ? "Link copied"
+      : shareState === "too-large"
+        ? "Too large"
+        : shareState === "err"
+          ? "Share failed"
+          : "Share";
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-6">
@@ -90,6 +113,15 @@ export function TopBar({
           aria-live="polite"
         >
           {copyState === "ok" ? <IconCheck /> : <IconCopy />}
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={handleShare}
+          label={shareLabel}
+          tone={shareState === "idle" ? "default" : "ember"}
+          aria-live="polite"
+        >
+          {shareState === "ok" ? <IconCheck /> : <IconShare />}
         </ToolbarButton>
 
         <span aria-hidden className="mx-1 h-5 w-px bg-rule" />
@@ -176,6 +208,17 @@ function IconCheck() {
   return (
     <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
       <path d="M3 7.5L6 10.5L11 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconShare() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <circle cx="4" cy="7" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="10.5" cy="3.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="10.5" cy="10.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.4 6.2L9.1 4.3M5.4 7.8L9.1 9.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
