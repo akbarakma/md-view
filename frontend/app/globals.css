@@ -118,6 +118,15 @@ body {
   margin-right: 0.5em;
 }
 
+/* Search highlight in the rendered preview */
+.search-hl {
+  background-color: rgba(194, 65, 12, 0.18);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-shadow: 0 0 0 1px rgba(194, 65, 12, 0.25);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,17 +1,22 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheatsheetDrawer } from "@/components/cheatsheet-drawer";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { PaneLabel } from "@/components/pane-label";
+import { SearchBar } from "@/components/search-bar";
 import { SplitPane } from "@/components/split-pane";
 import { TopBar } from "@/components/top-bar";
+import { copyText } from "@/lib/clipboard";
+import { findMatches } from "@/lib/find-matches";
 import { encodeShare } from "@/lib/share-url";
+import { shortenUrl } from "@/lib/shorten";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { usePersistedMd } from "@/lib/use-persisted-md";
 
 const SHARE_URL_LIMIT = 32_000;
-type ShareOutcome = "ok" | "too-large" | "failed";
+type ShareOutcome = "ok" | "ok-long" | "too-large" | "failed";
 
 const DEFAULT_SAMPLE = `# A quieter Markdown viewer
 
@@ -73,6 +78,55 @@ export default function Home() {
   const [md, setMd] = usePersistedMd(DEFAULT_SAMPLE);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeMatch, setActiveMatch] = useState(0);
+  const debouncedQuery = useDebouncedValue(searchQuery, 300);
+  const effectiveQuery = searchOpen ? debouncedQuery : "";
+
+  const editorMatches = useMemo(() => findMatches(md, effectiveQuery), [md, effectiveQuery]);
+  const matchCount = editorMatches.length;
+  const safeActive = matchCount > 0 ? Math.min(activeMatch, matchCount - 1) : 0;
+  const matchRange: [number, number] | null =
+    matchCount > 0
+      ? [editorMatches[safeActive], editorMatches[safeActive] + effectiveQuery.length]
+      : null;
+
+  // Reset to the first match whenever the (debounced) query changes.
+  useEffect(() => {
+    setActiveMatch(0);
+  }, [effectiveQuery]);
+
+  // Clear the query when the search bar is closed so highlights disappear.
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchQuery("");
+      setActiveMatch(0);
+    }
+  }, [searchOpen]);
+
+  // ⌘/Ctrl+F opens the in-app search instead of the browser's find.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const goNext = useCallback(() => {
+    setActiveMatch((i) => (matchCount === 0 ? 0 : (Math.min(i, matchCount - 1) + 1) % matchCount));
+  }, [matchCount]);
+
+  const goPrev = useCallback(() => {
+    setActiveMatch((i) =>
+      matchCount === 0 ? 0 : (Math.min(i, matchCount - 1) - 1 + matchCount) % matchCount,
+    );
+  }, [matchCount]);
+
   const handleImport = useCallback(
     (text: string) => {
       setMd(text);
@@ -93,54 +147,18 @@ export default function Home() {
   }, [md]);
 
   const handleShare = useCallback(async (): Promise<ShareOutcome> => {
-    const url = `${window.location.origin}${window.location.pathname}${encodeShare(md)}`;
-    if (url.length > SHARE_URL_LIMIT) return "too-large";
+    const longUrl = `${window.location.origin}${window.location.pathname}${encodeShare(md)}`;
+    if (longUrl.length > SHARE_URL_LIMIT) return "too-large";
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-        return "ok";
-      }
+      const short = await shortenUrl(longUrl);
+      return (await copyText(short)) ? "ok" : "failed";
     } catch {
-      // fall through to textarea fallback
-    }
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = url;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok ? "ok" : "failed";
-    } catch {
-      return "failed";
+      // Shortener unreachable / rate-limited — fall back to the long inline link.
+      return (await copyText(longUrl)) ? "ok-long" : "failed";
     }
   }, [md]);
 
-  const handleCopy = useCallback(async (): Promise<boolean> => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(md);
-        return true;
-      }
-    } catch {
-      // fall through to fallback
-    }
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = md;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }, [md]);
+  const handleCopy = useCallback(async (): Promise<boolean> => copyText(md), [md]);
 
   return (
     <div className="flex h-full flex-col">
@@ -149,18 +167,31 @@ export default function Home() {
         onToggleDrawer={() => setDrawerOpen((v) => !v)}
         toggleId={TOGGLE_ID}
         drawerId={DRAWER_ID}
+        searchOpen={searchOpen}
+        onToggleSearch={() => setSearchOpen((v) => !v)}
         onImport={handleImport}
         onExport={handleExport}
         onCopy={handleCopy}
         onShare={handleShare}
       />
-      <main className="flex-1 overflow-hidden">
+      <main className="relative flex-1 overflow-hidden">
+        {searchOpen && (
+          <SearchBar
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            count={matchCount}
+            current={matchCount > 0 ? safeActive + 1 : 0}
+            onNext={goNext}
+            onPrev={goPrev}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
         <SplitPane
           left={
             <>
               <PaneLabel index="01" label="Editor" hint="Plain Markdown" />
               <div className="flex-1 overflow-hidden">
-                <MarkdownEditor value={md} onChange={setMd} />
+                <MarkdownEditor value={md} onChange={setMd} matchRange={matchRange} />
               </div>
             </>
           }
@@ -168,7 +199,7 @@ export default function Home() {
             <>
               <PaneLabel index="02" label="Preview" hint="Rendered" />
               <div className="flex-1 overflow-hidden">
-                <MarkdownPreview source={md} />
+                <MarkdownPreview source={md} searchQuery={effectiveQuery} />
               </div>
             </>
           }

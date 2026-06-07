@@ -4,13 +4,15 @@ import { useEffect, useRef, useState } from "react";
 
 const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
 
-type ShareOutcome = "ok" | "too-large" | "failed";
+type ShareOutcome = "ok" | "ok-long" | "too-large" | "failed";
 
 type TopBarProps = {
   drawerOpen: boolean;
   onToggleDrawer: () => void;
   toggleId: string;
   drawerId: string;
+  searchOpen: boolean;
+  onToggleSearch: () => void;
   onImport: (text: string, filename: string) => void;
   onExport: () => void;
   onCopy: () => Promise<boolean> | boolean;
@@ -22,6 +24,8 @@ export function TopBar({
   onToggleDrawer,
   toggleId,
   drawerId,
+  searchOpen,
+  onToggleSearch,
   onImport,
   onExport,
   onCopy,
@@ -29,7 +33,9 @@ export function TopBar({
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
-  const [shareState, setShareState] = useState<"idle" | "ok" | "too-large" | "err">("idle");
+  const [shareState, setShareState] = useState<
+    "idle" | "loading" | "ok" | "ok-long" | "too-large" | "err"
+  >("idle");
   const copyTimerRef = useRef<number | null>(null);
   const shareTimerRef = useRef<number | null>(null);
 
@@ -61,20 +67,34 @@ export function TopBar({
   };
 
   const handleShare = async () => {
+    if (shareState === "loading") return;
+    setShareState("loading");
     const outcome = await onShare();
-    setShareState(outcome === "ok" ? "ok" : outcome === "too-large" ? "too-large" : "err");
+    setShareState(
+      outcome === "ok"
+        ? "ok"
+        : outcome === "ok-long"
+          ? "ok-long"
+          : outcome === "too-large"
+            ? "too-large"
+            : "err",
+    );
     if (shareTimerRef.current !== null) window.clearTimeout(shareTimerRef.current);
     shareTimerRef.current = window.setTimeout(() => setShareState("idle"), 1600);
   };
 
   const shareLabel =
-    shareState === "ok"
-      ? "Link copied"
-      : shareState === "too-large"
-        ? "Too large"
-        : shareState === "err"
-          ? "Share failed"
-          : "Share";
+    shareState === "loading"
+      ? "Sharing…"
+      : shareState === "ok"
+        ? "Link copied"
+        : shareState === "ok-long"
+          ? "Copied long link"
+          : shareState === "too-large"
+            ? "Too large"
+            : shareState === "err"
+              ? "Share failed"
+              : "Share";
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-6">
@@ -98,6 +118,14 @@ export function TopBar({
           tabIndex={-1}
         />
 
+        <ToolbarButton
+          onClick={onToggleSearch}
+          label="Search"
+          tone={searchOpen ? "ember" : "default"}
+        >
+          <IconSearch />
+        </ToolbarButton>
+
         <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Import">
           <IconUpload />
         </ToolbarButton>
@@ -119,9 +147,10 @@ export function TopBar({
           onClick={handleShare}
           label={shareLabel}
           tone={shareState === "idle" ? "default" : "ember"}
+          disabled={shareState === "loading"}
           aria-live="polite"
         >
-          {shareState === "ok" ? <IconCheck /> : <IconShare />}
+          {shareState === "ok" || shareState === "ok-long" ? <IconCheck /> : <IconShare />}
         </ToolbarButton>
 
         <span aria-hidden className="mx-1 h-5 w-px bg-rule" />
@@ -149,6 +178,7 @@ type ToolbarButtonProps = {
   onClick: () => void;
   label: string;
   tone?: "default" | "ember";
+  disabled?: boolean;
   children: React.ReactNode;
   "aria-live"?: "polite" | "off" | "assertive";
 };
@@ -157,6 +187,7 @@ function ToolbarButton({
   onClick,
   label,
   tone = "default",
+  disabled = false,
   children,
   ...rest
 }: ToolbarButtonProps) {
@@ -168,7 +199,8 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember ${toneClass}`}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember disabled:opacity-60 ${toneClass}`}
       {...rest}
     >
       <span aria-hidden className="grid size-3.5 place-items-center">
@@ -176,6 +208,15 @@ function ToolbarButton({
       </span>
       {label}
     </button>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <circle cx="6" cy="6" r="3.6" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M8.7 8.7L12 12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
   );
 }
 
