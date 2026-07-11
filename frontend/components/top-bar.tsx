@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
 
@@ -33,7 +33,6 @@ export function TopBar({
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const [showScrollHint, setShowScrollHint] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
   const [shareState, setShareState] = useState<
     "idle" | "loading" | "ok" | "ok-long" | "too-large" | "err"
@@ -48,22 +47,9 @@ export function TopBar({
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
-    if (!toolbar) return;
-
-    const updateScrollHint = () => {
-      setShowScrollHint(toolbar.scrollLeft + toolbar.clientWidth < toolbar.scrollWidth - 1);
-    };
-
-    updateScrollHint();
-    const resizeObserver = new ResizeObserver(updateScrollHint);
-    resizeObserver.observe(toolbar);
-    toolbar.addEventListener("scroll", updateScrollHint, { passive: true });
-    return () => {
-      resizeObserver.disconnect();
-      toolbar.removeEventListener("scroll", updateScrollHint);
-    };
+    if (toolbar) toolbar.scrollLeft = 0;
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,7 +117,7 @@ export function TopBar({
         <div
           ref={toolbarRef}
           aria-label="Toolbar actions. Swipe left to access more actions."
-          className="toolbar-scroll flex items-center gap-2 overflow-x-auto scroll-smooth sm:overflow-visible"
+          className="toolbar-scroll flex items-center gap-2 overflow-x-auto sm:overflow-visible"
         >
           <input
             ref={fileInputRef}
@@ -195,15 +181,6 @@ export function TopBar({
             Cheat sheet
           </button>
         </div>
-
-        {showScrollHint && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-gradient-to-l from-paper via-paper/95 to-transparent pl-5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-muted sm:hidden"
-          >
-            Swipe ←
-          </div>
-        )}
       </div>
     </header>
   );
