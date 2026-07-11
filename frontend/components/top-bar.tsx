@@ -32,6 +32,8 @@ export function TopBar({
   onShare,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
   const [shareState, setShareState] = useState<
     "idle" | "loading" | "ok" | "ok-long" | "too-large" | "err"
@@ -43,6 +45,24 @@ export function TopBar({
     return () => {
       if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
       if (shareTimerRef.current !== null) window.clearTimeout(shareTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+
+    const updateScrollHint = () => {
+      setShowScrollHint(toolbar.scrollLeft + toolbar.clientWidth < toolbar.scrollWidth - 1);
+    };
+
+    updateScrollHint();
+    const resizeObserver = new ResizeObserver(updateScrollHint);
+    resizeObserver.observe(toolbar);
+    toolbar.addEventListener("scroll", updateScrollHint, { passive: true });
+    return () => {
+      resizeObserver.disconnect();
+      toolbar.removeEventListener("scroll", updateScrollHint);
     };
   }, []);
 
@@ -97,8 +117,8 @@ export function TopBar({
               : "Share";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-6">
-      <div className="flex items-baseline gap-3">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-rule px-3 sm:px-6">
+      <div className="flex shrink-0 items-baseline gap-3">
         <span className="text-[20px] font-semibold leading-none tracking-tight text-ink">
           Markdown
         </span>
@@ -107,68 +127,83 @@ export function TopBar({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={MD_ACCEPT}
-          className="hidden"
-          onChange={handleFileChange}
-          aria-hidden
-          tabIndex={-1}
-        />
-
-        <ToolbarButton
-          onClick={onToggleSearch}
-          label="Search"
-          tone={searchOpen ? "ember" : "default"}
+      <div className="relative min-w-0 flex-1">
+        <div
+          ref={toolbarRef}
+          aria-label="Toolbar actions. Swipe left to access more actions."
+          className="toolbar-scroll flex items-center gap-2 overflow-x-auto scroll-smooth sm:overflow-visible"
         >
-          <IconSearch />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Import">
-          <IconUpload />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={onExport} label="Export">
-          <IconDownload />
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={handleCopy}
-          label={copyState === "ok" ? "Copied" : copyState === "err" ? "Copy failed" : "Copy"}
-          tone={copyState === "ok" ? "ember" : copyState === "err" ? "ember" : "default"}
-          aria-live="polite"
-        >
-          {copyState === "ok" ? <IconCheck /> : <IconCopy />}
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={handleShare}
-          label={shareLabel}
-          tone={shareState === "idle" ? "default" : "ember"}
-          disabled={shareState === "loading"}
-          aria-live="polite"
-        >
-          {shareState === "ok" || shareState === "ok-long" ? <IconCheck /> : <IconShare />}
-        </ToolbarButton>
-
-        <span aria-hidden className="mx-1 h-5 w-px bg-rule" />
-
-        <button
-          id={toggleId}
-          type="button"
-          onClick={onToggleDrawer}
-          aria-expanded={drawerOpen}
-          aria-controls={drawerId}
-          className="group inline-flex items-center gap-2 rounded-full border border-rule px-4 py-1.5 text-[12px] font-medium uppercase tracking-[0.18em] text-ink-soft transition-colors duration-150 ease-out hover:border-ember hover:text-ember focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember"
-        >
-          <span
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={MD_ACCEPT}
+            className="hidden"
+            onChange={handleFileChange}
             aria-hidden
-            className="size-1.5 rounded-full bg-ink-muted transition-colors duration-150 group-hover:bg-ember"
+            tabIndex={-1}
           />
-          Cheat sheet
-        </button>
+
+          <ToolbarButton
+            onClick={onToggleSearch}
+            label="Search"
+            tone={searchOpen ? "ember" : "default"}
+          >
+            <IconSearch />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Import">
+            <IconUpload />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={onExport} label="Export">
+            <IconDownload />
+          </ToolbarButton>
+
+          <ToolbarButton
+            onClick={handleCopy}
+            label={copyState === "ok" ? "Copied" : copyState === "err" ? "Copy failed" : "Copy"}
+            tone={copyState === "ok" ? "ember" : copyState === "err" ? "ember" : "default"}
+            aria-live="polite"
+          >
+            {copyState === "ok" ? <IconCheck /> : <IconCopy />}
+          </ToolbarButton>
+
+          <ToolbarButton
+            onClick={handleShare}
+            label={shareLabel}
+            tone={shareState === "idle" ? "default" : "ember"}
+            disabled={shareState === "loading"}
+            aria-live="polite"
+          >
+            {shareState === "ok" || shareState === "ok-long" ? <IconCheck /> : <IconShare />}
+          </ToolbarButton>
+
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-rule" />
+
+          <button
+            id={toggleId}
+            type="button"
+            onClick={onToggleDrawer}
+            aria-expanded={drawerOpen}
+            aria-controls={drawerId}
+            className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-rule px-4 py-1.5 text-[12px] font-medium uppercase tracking-[0.18em] text-ink-soft transition-colors duration-150 ease-out hover:border-ember hover:text-ember focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember"
+          >
+            <span
+              aria-hidden
+              className="size-1.5 rounded-full bg-ink-muted transition-colors duration-150 group-hover:bg-ember"
+            />
+            Cheat sheet
+          </button>
+        </div>
+
+        {showScrollHint && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-gradient-to-l from-paper via-paper/95 to-transparent pl-5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-muted sm:hidden"
+          >
+            Swipe ←
+          </div>
+        )}
       </div>
     </header>
   );
@@ -200,7 +235,7 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember disabled:opacity-60 ${toneClass}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember disabled:opacity-60 ${toneClass}`}
       {...rest}
     >
       <span aria-hidden className="grid size-3.5 place-items-center">

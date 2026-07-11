@@ -40,6 +40,15 @@ body {
   color: var(--paper);
 }
 
+/* Keep the mobile toolbar swipeable without adding a visual scrollbar. */
+.toolbar-scroll {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.toolbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* Resize handle */
 .resize-handle {
   position: relative;
