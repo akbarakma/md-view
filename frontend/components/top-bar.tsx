@@ -49,7 +49,18 @@ export function TopBar({
 
   useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
-    if (toolbar) toolbar.scrollLeft = 0;
+    if (!toolbar) return;
+
+    const resetScrollPosition = () => {
+      toolbar.scrollLeft = 0;
+      window.requestAnimationFrame(() => {
+        toolbar.scrollLeft = 0;
+      });
+    };
+
+    resetScrollPosition();
+    window.addEventListener("pageshow", resetScrollPosition);
+    return () => window.removeEventListener("pageshow", resetScrollPosition);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
