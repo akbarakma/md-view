@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type MarkdownEditorProps = {
   value: string;
@@ -22,6 +22,30 @@ const MIRRORED_STYLES = [
   "paddingRight",
   "textIndent",
 ] as const;
+
+// The gutter renders one node per logical line (hundreds for a big file), so it
+// lives in its own memoised component: while typing it only re-renders when the
+// line heights actually change, not on every keystroke.
+const Gutter = memo(function Gutter({
+  rowHeights,
+  innerRef,
+}: {
+  rowHeights: number[];
+  innerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const digits = String(Math.max(rowHeights.length, 1)).length;
+  return (
+    <div className="editor-gutter" style={{ width: `calc(${digits}ch + 1.65rem)` }} aria-hidden="true">
+      <div ref={innerRef} className="editor-gutter-inner">
+        {rowHeights.map((h, i) => (
+          <div key={i} className="editor-gutter-num" style={{ height: h }}>
+            {i + 1}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
 
 export function MarkdownEditor({ value, onChange, matchRange = null }: MarkdownEditorProps) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -64,7 +88,11 @@ export function MarkdownEditor({ value, onChange, matchRange = null }: MarkdownE
     for (const child of Array.from(mirror.children)) {
       heights.push((child as HTMLElement).offsetHeight);
     }
-    setRowHeights(heights);
+    // Keep the same array reference when nothing wrapped differently, so the
+    // memoised gutter skips re-rendering its hundreds of line-number nodes.
+    setRowHeights((prev) =>
+      prev.length === heights.length && prev.every((h, i) => h === heights[i]) ? prev : heights,
+    );
     syncScroll();
   }, [syncScroll]);
 
@@ -149,20 +177,9 @@ export function MarkdownEditor({ value, onChange, matchRange = null }: MarkdownE
     }
   };
 
-  const lineCount = Math.max(rowHeights.length, 1);
-  const digits = String(lineCount).length;
-
   return (
     <div className="editor-shell">
-      <div className="editor-gutter" style={{ width: `calc(${digits}ch + 1.65rem)` }} aria-hidden="true">
-        <div ref={gutterInnerRef} className="editor-gutter-inner">
-          {rowHeights.map((h, i) => (
-            <div key={i} className="editor-gutter-num" style={{ height: h }}>
-              {i + 1}
-            </div>
-          ))}
-        </div>
-      </div>
+      <Gutter rowHeights={rowHeights} innerRef={gutterInnerRef} />
       <textarea
         ref={ref}
         value={value}

@@ -1,6 +1,6 @@
 "use client";
 
-import { isValidElement, useEffect, useRef, type ReactNode } from "react";
+import { isValidElement, memo, useEffect, useRef, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PluggableList } from "unified";
@@ -59,7 +59,13 @@ const components: Components = {
   },
 };
 
-export function MarkdownPreview({ source, searchQuery = "" }: MarkdownPreviewProps) {
+// Memoised on its (primitive) props so re-renders of the page while typing don't
+// re-parse the whole document — only an actual change to the debounced source or
+// the search query re-runs ReactMarkdown.
+export const MarkdownPreview = memo(function MarkdownPreview({
+  source,
+  searchQuery = "",
+}: MarkdownPreviewProps) {
   const containerRef = useRef<HTMLElement | null>(null);
   const rehypePlugins: PluggableList = searchQuery ? [[rehypeHighlight, searchQuery]] : [];
 
@@ -79,4 +85,4 @@ export function MarkdownPreview({ source, searchQuery = "" }: MarkdownPreviewPro
       </ReactMarkdown>
     </article>
   );
-}
+});

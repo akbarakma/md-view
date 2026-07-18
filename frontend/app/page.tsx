@@ -88,6 +88,15 @@ export default function Home() {
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const effectiveQuery = searchOpen ? debouncedQuery : "";
 
+  // Reset selection to the first match whenever the (debounced) query changes.
+  // Adjusting state during render is React's endorsed alternative to an effect;
+  // it also covers closing search, where effectiveQuery becomes "".
+  const [queryForMatch, setQueryForMatch] = useState(effectiveQuery);
+  if (queryForMatch !== effectiveQuery) {
+    setQueryForMatch(effectiveQuery);
+    setActiveMatch(0);
+  }
+
   const editorMatches = useMemo(() => findMatches(md, effectiveQuery), [md, effectiveQuery]);
   const matchCount = editorMatches.length;
   const safeActive = matchCount > 0 ? Math.min(activeMatch, matchCount - 1) : 0;
@@ -96,18 +105,12 @@ export default function Home() {
       ? [editorMatches[safeActive], editorMatches[safeActive] + effectiveQuery.length]
       : null;
 
-  // Reset to the first match whenever the (debounced) query changes.
-  useEffect(() => {
-    setActiveMatch(0);
-  }, [effectiveQuery]);
-
-  // Clear the query when the search bar is closed so highlights disappear.
-  useEffect(() => {
-    if (!searchOpen) {
-      setSearchQuery("");
-      setActiveMatch(0);
-    }
-  }, [searchOpen]);
+  // Closing search clears the box so reopening starts fresh; highlights vanish
+  // because effectiveQuery becomes "".
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
 
   // ⌘/Ctrl+F opens the in-app search instead of the browser's find.
   useEffect(() => {
@@ -172,7 +175,7 @@ export default function Home() {
         toggleId={TOGGLE_ID}
         drawerId={DRAWER_ID}
         searchOpen={searchOpen}
-        onToggleSearch={() => setSearchOpen((v) => !v)}
+        onToggleSearch={searchOpen ? closeSearch : () => setSearchOpen(true)}
         onImport={handleImport}
         onExport={handleExport}
         onCopy={handleCopy}
@@ -187,7 +190,7 @@ export default function Home() {
             current={matchCount > 0 ? safeActive + 1 : 0}
             onNext={goNext}
             onPrev={goPrev}
-            onClose={() => setSearchOpen(false)}
+            onClose={closeSearch}
           />
         )}
         <SplitPane

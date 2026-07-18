@@ -198,6 +198,8 @@ body {
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: normal;
+  /* Isolate the off-screen measurement pass from the rest of the layout. */
+  contain: layout style;
 }
 
 /* ---- Mermaid diagrams ----------------------------------------------------- */
