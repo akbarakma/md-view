@@ -208,6 +208,7 @@ function MermaidDiagramImpl({ code }: { code: string }) {
   const seq = useRef(0);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const staticRef = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +258,15 @@ function MermaidDiagramImpl({ code }: { code: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, inView, safeId]);
 
+  // Make the inline (non-fullscreen) SVG scale to the pane width so the page
+  // scrolls normally over it — zoom/pan is reserved for the fullscreen view.
+  useLayoutEffect(() => {
+    const svgEl = staticRef.current?.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.style.maxWidth = "100%";
+    svgEl.style.height = "auto";
+  }, [svg]);
+
   // Close the fullscreen modal on Escape.
   useEffect(() => {
     if (!expanded) return;
@@ -270,10 +280,15 @@ function MermaidDiagramImpl({ code }: { code: string }) {
   return (
     <div ref={boxRef} className="mermaid-block not-prose">
       {svg ? (
-        <>
-          <DiagramViewport svg={svg} onToggleFullscreen={() => setExpanded(true)} />
+        <div className="mermaid-static-wrap">
+          <div ref={staticRef} className="mermaid-static" dangerouslySetInnerHTML={{ __html: svg }} />
+          <div className="mermaid-controls">
+            <button type="button" title="Full screen" aria-label="Full screen" onClick={() => setExpanded(true)}>
+              ⛶
+            </button>
+          </div>
           {error && <div className="mermaid-stale">Diagram not updated — syntax error while editing.</div>}
-        </>
+        </div>
       ) : error ? (
         <div className="mermaid-error">
           <div className="mermaid-error-title">Couldn’t render this diagram</div>

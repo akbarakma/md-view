@@ -76,6 +76,10 @@ function deriveFilename(md: string): string {
 
 export default function Home() {
   const [md, setMd] = usePersistedMd(DEFAULT_SAMPLE);
+  // Re-parsing a large document on every keystroke is what makes the preview lag
+  // (e.g. the 46-table ERD). The editor stays instant; the preview catches up
+  // after a brief pause in typing.
+  const debouncedMd = useDebouncedValue(md, 150);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -199,7 +203,7 @@ export default function Home() {
             <>
               <PaneLabel index="02" label="Preview" hint="Rendered" />
               <div className="flex-1 overflow-hidden">
-                <MarkdownPreview source={md} searchQuery={effectiveQuery} />
+                <MarkdownPreview source={debouncedMd} searchQuery={effectiveQuery} />
               </div>
             </>
           }

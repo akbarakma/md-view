@@ -204,6 +204,29 @@ body {
 .mermaid-block {
   margin: 1.5rem 0;
 }
+/* Inline (non-fullscreen) diagram: static, fits the pane width, scrolls with
+   the page. Pan/zoom is only available in the fullscreen view. */
+.mermaid-static-wrap {
+  position: relative;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background-color: var(--paper);
+  overflow: hidden;
+  /* Skip layout/paint of a big diagram while it's off-screen, and isolate its
+     internal layout so an editor reflow never re-lays-out the whole SVG. Huge
+     win for the 46-table ERD when scrolling or typing. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+.mermaid-static {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem;
+}
+.mermaid-static svg {
+  max-width: 100%;
+  height: auto;
+}
 .mermaid-viewport-wrap {
   position: relative;
   border: 1px solid var(--rule);
