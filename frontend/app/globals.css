@@ -136,6 +136,194 @@ body {
   box-shadow: 0 0 0 1px rgba(194, 65, 12, 0.25);
 }
 
+/* ---- Editor: line-number gutter ------------------------------------------ */
+.editor-shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+.editor-gutter {
+  flex: none;
+  overflow: hidden;
+  border-right: 1px solid var(--rule);
+  background-color: color-mix(in srgb, var(--paper-deep) 45%, var(--paper));
+  user-select: none;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.editor-gutter-inner {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  padding-right: 0.65rem;
+  will-change: transform;
+}
+.editor-gutter-num {
+  text-align: right;
+  color: color-mix(in srgb, var(--ink-muted) 72%, transparent);
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.editor-textarea {
+  flex: 1 1 auto;
+  height: 100%;
+  width: 100%;
+  resize: none;
+  background: transparent;
+  padding: 1.5rem 1.5rem 1.5rem 0.75rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ink-soft);
+  caret-color: var(--ember);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.editor-textarea:focus {
+  outline: none;
+}
+.editor-textarea::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 60%, transparent);
+}
+.editor-mirror {
+  position: absolute;
+  top: 0;
+  left: -99999px;
+  box-sizing: border-box;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+/* ---- Mermaid diagrams ----------------------------------------------------- */
+.mermaid-block {
+  margin: 1.5rem 0;
+}
+.mermaid-viewport-wrap {
+  position: relative;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background-color: var(--paper);
+  overflow: hidden;
+}
+.mermaid-viewport {
+  position: relative;
+  height: 26rem;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.mermaid-viewport.is-dragging {
+  cursor: grabbing;
+}
+.mermaid-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.mermaid-content svg {
+  display: block;
+}
+.mermaid-controls {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+  z-index: 2;
+}
+.mermaid-controls button {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--paper) 85%, transparent);
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+}
+.mermaid-controls button:hover {
+  border-color: var(--ember);
+  color: var(--ember);
+}
+.mermaid-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--ink-muted);
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+.mermaid-error {
+  padding: 1rem;
+  border: 1px solid var(--ember-soft);
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--ember) 6%, var(--paper));
+  color: var(--ink-soft);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+.mermaid-error-title {
+  color: var(--ember);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.mermaid-error pre {
+  white-space: pre-wrap;
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+}
+.mermaid-error-src {
+  color: var(--ink-muted);
+}
+.mermaid-stale {
+  padding: 0.4rem 0.75rem;
+  color: var(--ember);
+  background-color: color-mix(in srgb, var(--ember) 6%, var(--paper));
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+.mermaid-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background-color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.mermaid-modal-inner {
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  background-color: var(--paper);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.mermaid-modal-inner .mermaid-viewport-wrap {
+  height: 100%;
+  border: none;
+}
+.mermaid-modal-inner .mermaid-viewport {
+  height: 100%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
