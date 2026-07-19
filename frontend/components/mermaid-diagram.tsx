@@ -79,9 +79,45 @@ function DiagramViewport({
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const [transform, setTransform] = useState<Transform>({ scale: 1, tx: 0, ty: 0 });
   const [dragging, setDragging] = useState(false);
-  const drag = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+
+  // Single source of truth for the current transform. Pan/zoom mutate this ref
+  // and write straight to the DOM (via `paint`), so dragging a large diagram
+  // never triggers a React re-render of the injected SVG subtree — the old
+  // setState path reconciled thousands of SVG nodes on every pointer frame,
+  // which is what made fullscreen pan feel laggy on mobile.
+  const tRef = useRef<Transform>({ scale: 1, tx: 0, ty: 0 });
+  const rafRef = useRef<number | null>(null);
+  const dropTimer = useRef<number | null>(null);
+
+  // Coalesce every transform change into one style write per animation frame.
+  const paint = useCallback(() => {
+    rafRef.current = null;
+    const el = contentRef.current;
+    if (!el) return;
+    const { scale, tx, ty } = tRef.current;
+    el.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  }, []);
+  const schedulePaint = useCallback(() => {
+    if (rafRef.current == null) rafRef.current = requestAnimationFrame(paint);
+  }, [paint]);
+
+  // Promote the content to its own compositor layer only while interacting, then
+  // drop it so a big SVG isn't held in GPU memory for the whole life of the modal.
+  const enableLayer = useCallback(() => {
+    if (dropTimer.current != null) {
+      clearTimeout(dropTimer.current);
+      dropTimer.current = null;
+    }
+    if (contentRef.current) contentRef.current.style.willChange = "transform";
+  }, []);
+  const scheduleDropLayer = useCallback(() => {
+    if (dropTimer.current != null) clearTimeout(dropTimer.current);
+    dropTimer.current = window.setTimeout(() => {
+      dropTimer.current = null;
+      if (contentRef.current) contentRef.current.style.willChange = "auto";
+    }, 400);
+  }, []);
 
   // Normalise the injected SVG to its natural pixel size and return it.
   const naturalSize = useCallback((): { w: number; h: number } | null => {
@@ -106,8 +142,9 @@ function DiagramViewport({
     const scale = Math.max(MIN_SCALE, Math.min(cw / size.w, ch / size.h, 1));
     const tx = (vp.clientWidth - size.w * scale) / 2;
     const ty = (vp.clientHeight - size.h * scale) / 2;
-    setTransform({ scale, tx, ty });
-  }, [naturalSize]);
+    tRef.current = { scale, tx, ty };
+    paint();
+  }, [naturalSize, paint]);
 
   // Fit whenever the diagram content changes.
   useLayoutEffect(() => {
@@ -115,17 +152,26 @@ function DiagramViewport({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [svg, fullscreen]);
 
-  const zoomBy = useCallback((factor: number, cx?: number, cy?: number) => {
-    setTransform((t) => {
-      const vp = viewportRef.current;
-      const px = cx ?? (vp ? vp.clientWidth / 2 : 0);
-      const py = cy ?? (vp ? vp.clientHeight / 2 : 0);
+  // Zoom around a viewport-local point, keeping that point stationary.
+  const zoomAt = useCallback(
+    (factor: number, px: number, py: number) => {
+      const t = tRef.current;
       const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor));
       const k = scale / t.scale;
-      // Keep the point under the cursor stationary.
-      return { scale, tx: px - (px - t.tx) * k, ty: py - (py - t.ty) * k };
-    });
-  }, []);
+      tRef.current = { scale, tx: px - (px - t.tx) * k, ty: py - (py - t.ty) * k };
+      enableLayer();
+      scheduleDropLayer();
+      schedulePaint();
+    },
+    [enableLayer, scheduleDropLayer, schedulePaint],
+  );
+  const zoomByCenter = useCallback(
+    (factor: number) => {
+      const vp = viewportRef.current;
+      zoomAt(factor, vp ? vp.clientWidth / 2 : 0, vp ? vp.clientHeight / 2 : 0);
+    },
+    [zoomAt],
+  );
 
   // Non-passive wheel listener so we can preventDefault the page scroll.
   useEffect(() => {
@@ -134,26 +180,113 @@ function DiagramViewport({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = vp.getBoundingClientRect();
-      zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - rect.left, e.clientY - rect.top);
+      zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - rect.left, e.clientY - rect.top);
     };
     vp.addEventListener("wheel", onWheel, { passive: false });
     return () => vp.removeEventListener("wheel", onWheel);
-  }, [zoomBy]);
+  }, [zoomAt]);
+
+  // Cancel any pending frame / timer on unmount.
+  useEffect(
+    () => () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      if (dropTimer.current != null) clearTimeout(dropTimer.current);
+    },
+    [],
+  );
+
+  // Active pointers (two = pinch). Pan and pinch are both driven imperatively
+  // through tRef + schedulePaint, so touch gestures stay off the React render path.
+  const rectRef = useRef<DOMRect | null>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pan = useRef<{ id: number; x: number; y: number; tx: number; ty: number } | null>(null);
+  const pinch = useRef<{ dist: number; mx: number; my: number; scale: number; tx: number; ty: number } | null>(null);
+
+  const localPoint = (e: React.PointerEvent) => {
+    const r = rectRef.current;
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
+  };
+  const startPan = (id: number, p: { x: number; y: number }) => {
+    const t = tRef.current;
+    pan.current = { id, x: p.x, y: p.y, tx: t.tx, ty: t.ty };
+  };
+  const releaseCapture = (id: number) => {
+    try {
+      viewportRef.current?.releasePointerCapture(id);
+    } catch {
+      /* pointer already gone (e.g. pointercancel) */
+    }
+  };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    drag.current = { x: e.clientX, y: e.clientY, tx: transform.tx, ty: transform.ty };
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (pointers.current.size === 0) {
+      rectRef.current = viewportRef.current?.getBoundingClientRect() ?? null;
+    }
+    viewportRef.current?.setPointerCapture?.(e.pointerId);
+    const p = localPoint(e);
+    pointers.current.set(e.pointerId, p);
     setDragging(true);
+    enableLayer();
+
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      const t = tRef.current;
+      pinch.current = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        mx: (a.x + b.x) / 2,
+        my: (a.y + b.y) / 2,
+        scale: t.scale,
+        tx: t.tx,
+        ty: t.ty,
+      };
+      pan.current = null;
+    } else if (pointers.current.size === 1) {
+      startPan(e.pointerId, p);
+    }
   };
+
   const onPointerMove = (e: React.PointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    setTransform((t) => ({ ...t, tx: d.tx + (e.clientX - d.x), ty: d.ty + (e.clientY - d.y) }));
+    if (!pointers.current.has(e.pointerId)) return;
+    const p = localPoint(e);
+    pointers.current.set(e.pointerId, p);
+
+    if (pinch.current && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const s = pinch.current;
+      const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s.scale * (dist / s.dist)));
+      // The content point under the gesture's initial midpoint stays under the
+      // current midpoint — folds pinch-zoom and two-finger pan into one update.
+      const cx = (s.mx - s.tx) / s.scale;
+      const cy = (s.my - s.ty) / s.scale;
+      tRef.current = { scale, tx: mx - cx * scale, ty: my - cy * scale };
+      schedulePaint();
+    } else if (pan.current && pan.current.id === e.pointerId) {
+      const d = pan.current;
+      const t = tRef.current;
+      tRef.current = { scale: t.scale, tx: d.tx + (p.x - d.x), ty: d.ty + (p.y - d.y) };
+      schedulePaint();
+    }
   };
-  const endDrag = () => {
-    drag.current = null;
-    setDragging(false);
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    releaseCapture(e.pointerId);
+    pointers.current.delete(e.pointerId);
+
+    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size === 1) {
+      // Resume single-finger pan with the finger still on screen.
+      const [[id, p]] = [...pointers.current.entries()];
+      startPan(id, p);
+    } else if (pointers.current.size === 0) {
+      pan.current = null;
+      setDragging(false);
+      scheduleDropLayer();
+    }
   };
 
   return (
@@ -163,28 +296,21 @@ function DiagramViewport({
         className={`mermaid-viewport${dragging ? " is-dragging" : ""}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         role="img"
         aria-label="Rendered diagram"
       >
-        <div
-          ref={contentRef}
-          className="mermaid-content"
-          style={{
-            transform: `translate(${transform.tx}px, ${transform.ty}px) scale(${transform.scale})`,
-          }}
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
+        <div ref={contentRef} className="mermaid-content" dangerouslySetInnerHTML={{ __html: svg }} />
       </div>
       <div className="mermaid-controls">
-        <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)}>
+        <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => zoomByCenter(1 / 1.2)}>
           −
         </button>
         <button type="button" title="Reset view" aria-label="Reset view" onClick={fit}>
           ⤢
         </button>
-        <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => zoomBy(1.2)}>
+        <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => zoomByCenter(1.2)}>
           +
         </button>
         {onToggleFullscreen && (
