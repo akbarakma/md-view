@@ -1,4 +1,4 @@
-const BASE = process.env.NEXT_PUBLIC_SHORTENER_BASE_URL ?? "https://short.akbarakma.tech";
+const BASE = process.env.NEXT_PUBLIC_SHORTENER_BASE_URL ?? "https://short.akbarakma.com";
 
 /** Shorten a long URL via the shorten-url service. Returns the short link. */
 export async function shortenUrl(longUrl: string): Promise<string> {
