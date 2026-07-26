@@ -83,9 +83,15 @@ export function SearchBar({
         </div>
       ) : null}
 
+      {/* Stays mounted so the live region can still announce, but takes no layout
+          space until there is a count to show — reserving the width permanently
+          left a dead gap between the scope toggle and the arrows. `min-w-8` is
+          just enough that stepping 9/100 -> 10/100 doesn't nudge the arrows. */}
       <span
-        className="min-w-[2.5rem] text-right text-[11px] tabular-nums text-ink-muted"
         aria-live="polite"
+        className={
+          counter ? "min-w-8 text-right text-[11px] tabular-nums text-ink-muted" : "sr-only"
+        }
       >
         {counter}
       </span>
