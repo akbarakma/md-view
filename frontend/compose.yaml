@@ -15,6 +15,10 @@ services:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
+      # Server-side only, read by /api/chat. Put the value in a `.env` file next
+      # to this compose file — Compose substitutes it here at runtime, and
+      # .dockerignore keeps it out of the image.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/"]
       interval: 30s

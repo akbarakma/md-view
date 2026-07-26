@@ -135,6 +135,29 @@ body {
   padding: 0 1px;
   box-shadow: 0 0 0 1px rgba(194, 65, 12, 0.25);
 }
+/* The one match the counter is pointing at, applied from MarkdownPreview. */
+.search-hl-active {
+  background-color: rgba(194, 65, 12, 0.4);
+  box-shadow: 0 0 0 1px var(--ember);
+}
+
+/* ---- AI chat -------------------------------------------------------------- */
+/* Prose defaults are tuned for a full page; tighten them for a narrow panel. */
+.prose-chat :is(p, ul, ol, pre, blockquote, table) {
+  margin-top: 0.6em;
+  margin-bottom: 0.6em;
+}
+.prose-chat :is(h1, h2, h3, h4) {
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  font-size: 1.05em;
+}
+.prose-chat > :first-child {
+  margin-top: 0;
+}
+.prose-chat > :last-child {
+  margin-bottom: 0;
+}
 
 /* ---- Editor: line-number gutter ------------------------------------------ */
 .editor-shell {

@@ -20,6 +20,23 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment
+
+| Variable | Required | Purpose |
+| -------- | -------- | ------- |
+| `OPENROUTER_API_KEY` | for AI chat | Server-side key used by `app/api/chat/route.ts`. Without it the chat panel returns a "not configured" message and the rest of the app works normally. |
+| `NEXT_PUBLIC_SHORTENER_BASE_URL` | no | Overrides the link shortener used by Share. Defaults to `https://short.akbarakma.com`. |
+
+`OPENROUTER_API_KEY` is **never** exposed to the browser — do not add a
+`NEXT_PUBLIC_` prefix. Locally it goes in `.env.local`; in Docker it goes in a
+`.env` next to `compose.yaml`, which Compose substitutes into the container
+environment. Both are excluded by `.gitignore` and `.dockerignore`.
+
+The chat route calls `deepseek/deepseek-v4-pro` through OpenRouter with the
+provider pinned to DeepSeek (`allow_fallbacks: false`) and reasoning disabled
+(`reasoning: { effort: "none" }`). There is no rate limiting, so use a dedicated
+key with a credit limit set on it.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

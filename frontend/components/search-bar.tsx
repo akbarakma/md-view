@@ -2,11 +2,17 @@
 
 import { useEffect, useRef } from "react";
 
+export type SearchScope = "editor" | "preview";
+
 type SearchBarProps = {
   query: string;
   onQueryChange: (value: string) => void;
   count: number;
   current: number; // 1-based index of the active match, 0 when none
+  scope: SearchScope;
+  onScopeChange: (scope: SearchScope) => void;
+  /** Hidden on mobile, where the scope always follows the active pane tab. */
+  showScopeToggle: boolean;
   onNext: () => void;
   onPrev: () => void;
   onClose: () => void;
@@ -17,6 +23,9 @@ export function SearchBar({
   onQueryChange,
   count,
   current,
+  scope,
+  onScopeChange,
+  showScopeToggle,
   onNext,
   onPrev,
   onClose,
@@ -44,7 +53,9 @@ export function SearchBar({
   return (
     <div
       role="search"
-      className="absolute right-4 top-3 z-10 flex items-center gap-1.5 rounded-full border border-rule bg-paper/95 py-1 pl-3 pr-1.5 shadow-sm backdrop-blur"
+      // On mobile the pane tab row occupies the top of <main>, so the pill drops
+      // below it; on desktop it keeps its original position over the pane label.
+      className="absolute right-4 top-12 z-10 flex items-center gap-1.5 rounded-full border border-rule bg-paper/95 py-1 pl-3 pr-1.5 shadow-sm backdrop-blur md:top-3"
     >
       <input
         ref={inputRef}
@@ -53,10 +64,29 @@ export function SearchBar({
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Search text…"
-        aria-label="Search text in editor and preview"
-        className="w-44 bg-transparent text-[13px] text-ink-soft placeholder:text-ink-muted/60 focus:outline-none"
+        aria-label={`Search text in the ${scope}`}
+        className="w-32 bg-transparent text-[13px] text-ink-soft placeholder:text-ink-muted/60 focus:outline-none sm:w-44"
       />
-      <span className="min-w-[2.5rem] text-right text-[11px] tabular-nums text-ink-muted" aria-live="polite">
+
+      {showScopeToggle ? (
+        <div
+          role="group"
+          aria-label="Search scope"
+          className="flex shrink-0 items-center gap-0.5 rounded-full bg-paper-deep/70 p-0.5"
+        >
+          <ScopeButton active={scope === "editor"} onClick={() => onScopeChange("editor")}>
+            Editor
+          </ScopeButton>
+          <ScopeButton active={scope === "preview"} onClick={() => onScopeChange("preview")}>
+            Preview
+          </ScopeButton>
+        </div>
+      ) : null}
+
+      <span
+        className="min-w-[2.5rem] text-right text-[11px] tabular-nums text-ink-muted"
+        aria-live="polite"
+      >
         {counter}
       </span>
       <SearchIconButton onClick={onPrev} disabled={count === 0} label="Previous match">
@@ -69,6 +99,27 @@ export function SearchBar({
         <IconClose />
       </SearchIconButton>
     </div>
+  );
+}
+
+type ScopeButtonProps = {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+};
+
+function ScopeButton({ active, onClick, children }: ScopeButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ember ${
+        active ? "bg-paper text-ember shadow-sm" : "text-ink-muted hover:text-ink-soft"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -86,7 +137,7 @@ function SearchIconButton({ onClick, label, disabled = false, children }: Search
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="grid size-6 place-items-center rounded-full text-ink-muted transition-colors duration-150 hover:bg-rule/40 hover:text-ember disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ember"
+      className="grid size-6 shrink-0 place-items-center rounded-full text-ink-muted transition-colors duration-150 hover:bg-rule/40 hover:text-ember disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ember"
     >
       {children}
     </button>

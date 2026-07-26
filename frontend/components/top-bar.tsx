@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SiteCredit } from "@/components/site-credit";
 
 const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
 
@@ -115,21 +116,31 @@ export function TopBar({
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-rule px-3 sm:px-6">
-      <div className="flex shrink-0 items-baseline gap-3">
-        <span className="text-[20px] font-semibold leading-none tracking-tight text-ink">
-          Markdown
-        </span>
-        <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted">
-          Viewer
-        </span>
+      <div className="flex shrink-0 flex-col justify-center gap-1">
+        <div className="flex items-baseline gap-3">
+          <span className="text-[20px] font-semibold leading-none tracking-tight text-ink">
+            Markdown
+          </span>
+          <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted">
+            Viewer
+          </span>
+        </div>
+        {/* On mobile the header has no room for a byline — it moves to the right
+            end of the pane tab row instead (see PaneTabs). */}
+        <SiteCredit className="hidden text-[10px] leading-none md:block" />
       </div>
 
       <div className="relative min-w-0 flex-1">
         <div
           ref={toolbarRef}
           aria-label="Toolbar actions. Swipe left to access more actions."
-          className="toolbar-scroll flex items-center gap-2 overflow-x-auto sm:overflow-visible"
+          className="toolbar-scroll flex overflow-x-auto sm:overflow-visible"
         >
+          {/* `ml-auto` right-aligns the group when it fits, and collapses to 0
+              when it doesn't — so on a narrow screen the row simply overflows
+              and scrolls from the left. Using `justify-end` here instead would
+              push the overflow off the left edge, where it can't be scrolled to. */}
+          <div className="ml-auto flex w-max shrink-0 items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -191,6 +202,7 @@ export function TopBar({
             />
             Cheat sheet
           </button>
+          </div>
         </div>
       </div>
     </header>

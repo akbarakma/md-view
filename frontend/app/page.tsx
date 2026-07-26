@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AiChat } from "@/components/ai-chat";
 import { CheatsheetDrawer } from "@/components/cheatsheet-drawer";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { PaneLabel } from "@/components/pane-label";
-import { SearchBar } from "@/components/search-bar";
+import { PaneTabs, type Pane } from "@/components/pane-tabs";
+import { SearchBar, type SearchScope } from "@/components/search-bar";
 import { SplitPane } from "@/components/split-pane";
 import { TopBar } from "@/components/top-bar";
 import { copyText } from "@/lib/clipboard";
@@ -13,6 +15,7 @@ import { findMatches } from "@/lib/find-matches";
 import { encodeShare } from "@/lib/share-url";
 import { shortenUrl } from "@/lib/shorten";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { usePersistedMd } from "@/lib/use-persisted-md";
 
 const SHARE_URL_LIMIT = 32_000;
@@ -81,28 +84,47 @@ export default function Home() {
   // after a brief pause in typing.
   const debouncedMd = useDebouncedValue(md, 150);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Below `md` the split view is unusable, so the panes become tabs instead.
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  const [activePane, setActivePane] = useState<Pane>("preview");
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeMatch, setActiveMatch] = useState(0);
+  const [desktopScope, setDesktopScope] = useState<SearchScope>("preview");
+  const [previewCount, setPreviewCount] = useState(0);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const effectiveQuery = searchOpen ? debouncedQuery : "";
 
-  // Reset selection to the first match whenever the (debounced) query changes.
-  // Adjusting state during render is React's endorsed alternative to an effect;
-  // it also covers closing search, where effectiveQuery becomes "".
-  const [queryForMatch, setQueryForMatch] = useState(effectiveQuery);
-  if (queryForMatch !== effectiveQuery) {
-    setQueryForMatch(effectiveQuery);
+  // On mobile only one pane is on screen, so searching the other one would be
+  // meaningless — the scope simply follows the active tab.
+  const scope: SearchScope = isDesktop ? desktopScope : activePane;
+
+  // Only the scoped pane is highlighted; the other is handed an empty query.
+  const editorQuery = scope === "editor" ? effectiveQuery : "";
+  const previewQuery = scope === "preview" ? effectiveQuery : "";
+
+  // Reset selection to the first match whenever the (debounced) query or the
+  // scope changes. Adjusting state during render is React's endorsed alternative
+  // to an effect; it also covers closing search, where effectiveQuery becomes "".
+  const resetKey = `${scope}::${effectiveQuery}`;
+  const [lastResetKey, setLastResetKey] = useState(resetKey);
+  if (lastResetKey !== resetKey) {
+    setLastResetKey(resetKey);
     setActiveMatch(0);
   }
 
-  const editorMatches = useMemo(() => findMatches(md, effectiveQuery), [md, effectiveQuery]);
-  const matchCount = editorMatches.length;
+  const editorMatches = useMemo(() => findMatches(md, editorQuery), [md, editorQuery]);
+
+  // Editor matches come from the raw source; preview matches are counted from the
+  // rendered DOM, so `**bold**` matches "bold" there and not "**".
+  const matchCount = scope === "editor" ? editorMatches.length : previewCount;
   const safeActive = matchCount > 0 ? Math.min(activeMatch, matchCount - 1) : 0;
   const matchRange: [number, number] | null =
-    matchCount > 0
-      ? [editorMatches[safeActive], editorMatches[safeActive] + effectiveQuery.length]
+    scope === "editor" && editorMatches.length > 0
+      ? [editorMatches[safeActive], editorMatches[safeActive] + editorQuery.length]
       : null;
 
   // Closing search clears the box so reopening starts fresh; highlights vanish
@@ -167,11 +189,32 @@ export default function Home() {
 
   const handleCopy = useCallback(async (): Promise<boolean> => copyText(md), [md]);
 
+  // The cheat sheet and the chat both occupy the right edge — only one at a time.
+  const openChat = useCallback(() => {
+    setDrawerOpen(false);
+    setChatOpen(true);
+  }, []);
+
+  const toggleDrawer = useCallback(() => {
+    setChatOpen(false);
+    setDrawerOpen((v) => !v);
+  }, []);
+
+  const editor = <MarkdownEditor value={md} onChange={setMd} matchRange={matchRange} />;
+  const preview = (
+    <MarkdownPreview
+      source={debouncedMd}
+      searchQuery={previewQuery}
+      activeIndex={safeActive}
+      onMatchCountChange={setPreviewCount}
+    />
+  );
+
   return (
     <div className="flex h-full flex-col">
       <TopBar
         drawerOpen={drawerOpen}
-        onToggleDrawer={() => setDrawerOpen((v) => !v)}
+        onToggleDrawer={toggleDrawer}
         toggleId={TOGGLE_ID}
         drawerId={DRAWER_ID}
         searchOpen={searchOpen}
@@ -188,29 +231,54 @@ export default function Home() {
             onQueryChange={setSearchQuery}
             count={matchCount}
             current={matchCount > 0 ? safeActive + 1 : 0}
+            scope={scope}
+            onScopeChange={setDesktopScope}
+            showScopeToggle={isDesktop}
             onNext={goNext}
             onPrev={goPrev}
             onClose={closeSearch}
           />
         )}
-        <SplitPane
-          left={
-            <>
-              <PaneLabel index="01" label="Editor" hint="Plain Markdown" />
-              <div className="flex-1 overflow-hidden">
-                <MarkdownEditor value={md} onChange={setMd} matchRange={matchRange} />
-              </div>
-            </>
-          }
-          right={
-            <>
-              <PaneLabel index="02" label="Preview" hint="Rendered" />
-              <div className="flex-1 overflow-hidden">
-                <MarkdownPreview source={debouncedMd} searchQuery={effectiveQuery} />
-              </div>
-            </>
-          }
-        />
+        {isDesktop ? (
+          <SplitPane
+            left={
+              <>
+                <PaneLabel index="01" label="Editor" hint="Plain Markdown" />
+                <div className="flex-1 overflow-hidden">{editor}</div>
+              </>
+            }
+            right={
+              <>
+                <PaneLabel index="02" label="Preview" hint="Rendered" />
+                <div className="flex-1 overflow-hidden">{preview}</div>
+              </>
+            }
+          />
+        ) : (
+          // Both panes stay mounted and the inactive one is hidden, so switching
+          // tabs never re-parses the document or re-renders its mermaid diagrams.
+          <div className="flex h-full flex-col">
+            <PaneTabs active={activePane} onChange={setActivePane} />
+            <div
+              role="tabpanel"
+              id="pane-panel-editor"
+              aria-labelledby="pane-tab-editor"
+              hidden={activePane !== "editor"}
+              className="flex-1 overflow-hidden"
+            >
+              {editor}
+            </div>
+            <div
+              role="tabpanel"
+              id="pane-panel-preview"
+              aria-labelledby="pane-tab-preview"
+              hidden={activePane !== "preview"}
+              className="flex-1 overflow-hidden"
+            >
+              {preview}
+            </div>
+          </div>
+        )}
       </main>
       <CheatsheetDrawer
         open={drawerOpen}
@@ -218,6 +286,7 @@ export default function Home() {
         drawerId={DRAWER_ID}
         toggleId={TOGGLE_ID}
       />
+      <AiChat doc={md} open={chatOpen} onOpen={openChat} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

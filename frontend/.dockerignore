@@ -9,7 +9,8 @@ compose.yaml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env*.local
+# Every .env variant — the OpenRouter key must never end up in an image layer.
+.env*
 .vscode
 .idea
 README.md
