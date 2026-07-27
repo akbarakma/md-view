@@ -211,6 +211,22 @@ body {
 .editor-textarea::placeholder {
   color: color-mix(in srgb, var(--ink-muted) 60%, transparent);
 }
+/* 16px on touch stops iOS Safari auto-zooming the page when the textarea takes
+   focus — tapping into the editor is the first thing you do on a phone, and
+   Safari holds that zoom after the keyboard closes. Keyed on pointer rather than
+   a width breakpoint because a phone in landscape is wider than `md`.
+   The gutter has to move with the textarea, not just the textarea: its width is
+   `ch`-based and its digits share the text's baseline, so leaving it at 14px
+   would misalign the line numbers against the taller rows. The mirror needs no
+   rule here — it copies the textarea's computed font metrics at measure time
+   (see MIRRORED_STYLES in markdown-editor.tsx). */
+@media (pointer: coarse) {
+  .editor-gutter,
+  .editor-textarea {
+    font-size: 16px;
+  }
+}
+
 .editor-mirror {
   position: absolute;
   top: 0;

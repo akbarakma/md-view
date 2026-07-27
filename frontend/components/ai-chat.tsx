@@ -337,7 +337,14 @@ export function AiChat({ doc, open, onOpen, onClose }: AiChatProps) {
               onKeyDown={onDraftKeyDown}
               placeholder="Ask about this document…"
               aria-label="Message"
-              className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-[13.5px] leading-relaxed text-ink-soft placeholder:text-ink-muted/60 focus:outline-none"
+              // 16px on touch is load-bearing, not a style choice: iOS Safari
+              // auto-zooms the page into any focused control under 16px, and the
+              // panel focuses this on open — so the FAB tap alone zoomed the whole
+              // app, and Safari held that zoom after the keyboard closed. Fixing it
+              // with `maximum-scale` instead would cost pinch-zoom everywhere.
+              // Keyed on pointer, not a width breakpoint: a phone in landscape is
+              // wider than `md`, and would zoom again on every width-based guard.
+              className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-[13.5px] leading-relaxed text-ink-soft placeholder:text-ink-muted/60 focus:outline-none pointer-coarse:text-[16px]"
             />
             {busy ? (
               <button

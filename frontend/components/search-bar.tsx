@@ -65,7 +65,10 @@ export function SearchBar({
         onKeyDown={handleKeyDown}
         placeholder="Search text…"
         aria-label={`Search text in the ${scope}`}
-        className="w-32 bg-transparent text-[13px] text-ink-soft placeholder:text-ink-muted/60 focus:outline-none sm:w-44"
+        // 16px on touch stops iOS Safari auto-zooming the page: this autofocuses
+        // when the pill opens, so the toolbar tap alone triggered it. See the
+        // composer in ai-chat.tsx for the full reasoning.
+        className="w-32 bg-transparent text-[13px] text-ink-soft placeholder:text-ink-muted/60 focus:outline-none pointer-coarse:text-[16px] sm:w-44"
       />
 
       {showScopeToggle ? (
