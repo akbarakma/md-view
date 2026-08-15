@@ -12,6 +12,8 @@ export function usePersistedMd(initialValue: string) {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const clearHash = () => {
       window.history.replaceState(
         null,
@@ -20,8 +22,8 @@ export function usePersistedMd(initialValue: string) {
       );
     };
 
-    const consumeHash = (confirmReplace: boolean): boolean => {
-      const shared = decodeShareFromHash(window.location.hash);
+    const consumeHash = async (confirmReplace: boolean): Promise<boolean> => {
+      const shared = await decodeShareFromHash(window.location.hash);
       if (shared === null) return false;
       if (confirmReplace) {
         const ok = window.confirm(
@@ -37,21 +39,28 @@ export function usePersistedMd(initialValue: string) {
       return true;
     };
 
-    if (!consumeHash(false)) {
-      try {
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored !== null) setValue(stored);
-      } catch {
-        // localStorage unavailable (private mode, quota, etc.) — fall back to initial
+    void (async () => {
+      const consumed = await consumeHash(false);
+      if (cancelled) return;
+      if (!consumed) {
+        try {
+          const stored = window.localStorage.getItem(STORAGE_KEY);
+          if (stored !== null) setValue(stored);
+        } catch {
+          // localStorage unavailable (private mode, quota, etc.) — fall back to initial
+        }
       }
-    }
-    setHydrated(true);
+      setHydrated(true);
+    })();
 
     const onHashChange = () => {
-      consumeHash(true);
+      void consumeHash(true);
     };
     window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("hashchange", onHashChange);
+    };
   }, []);
 
   useEffect(() => {
