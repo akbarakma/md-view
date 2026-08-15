@@ -18,9 +18,10 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { usePersistedMd } from "@/lib/use-persisted-md";
 
-// Must stay below the shortener's nginx proxy_buffer_size (256k) — opening a
-// short link 302s the whole URL back in a Location header nginx buffers whole.
-const SHARE_URL_LIMIT = 240_000;
+// Opening a short link 302s the whole URL back in a Location header. The
+// Cloudflare Tunnel in front of short.akbarakma.com stalls on response headers
+// above ~87 KB (measured), so cap well under that. (nginx buffers are 256k.)
+const SHARE_URL_LIMIT = 70_000;
 type ShareOutcome = "ok" | "ok-long" | "too-large" | "failed";
 
 const DEFAULT_SAMPLE = `# A quieter Markdown viewer
