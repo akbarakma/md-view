@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "deepseek/deepseek-v4-pro";
+const MODEL = "deepseek/deepseek-v4-flash-0731";
 // OpenRouter attribution — shows the app on the model's leaderboard page.
 const SITE_URL = "https://md.akbarakma.com";
 const SITE_NAME = "Markdown Viewer";
@@ -163,9 +163,9 @@ export async function POST(req: NextRequest) {
         // Pin to DeepSeek's own endpoint — it is the cheapest provider for this
         // model, and fallbacks would silently route to a pricier one.
         provider: { order: ["deepseek"], allow_fallbacks: false },
-        // V4 Pro is a hybrid reasoning model; "none" switches thinking off so we
-        // don't pay for reasoning tokens on what are short lookup questions.
-        reasoning: { effort: "none" },
+        // V4 Flash hybrid reasoning at max ("xhigh") per Akbar 2026-08-03; was "none"
+        // to skip reasoning cost on short lookups (estate-wide flash + xhigh migration).
+        reasoning: { effort: "xhigh" },
         stream: true,
         // The document goes first and stays byte-stable between turns, so
         // DeepSeek's automatic prefix cache serves it at cache-read pricing.
