@@ -18,7 +18,9 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { usePersistedMd } from "@/lib/use-persisted-md";
 
-const SHARE_URL_LIMIT = 32_000;
+// Must stay below the shortener's nginx proxy_buffer_size (256k) — opening a
+// short link 302s the whole URL back in a Location header nginx buffers whole.
+const SHARE_URL_LIMIT = 240_000;
 type ShareOutcome = "ok" | "ok-long" | "too-large" | "failed";
 
 const DEFAULT_SAMPLE = `# A quieter Markdown viewer
@@ -176,7 +178,7 @@ export default function Home() {
   }, [md]);
 
   const handleShare = useCallback(async (): Promise<ShareOutcome> => {
-    const longUrl = `${window.location.origin}${window.location.pathname}${encodeShare(md)}`;
+    const longUrl = `${window.location.origin}${window.location.pathname}${await encodeShare(md)}`;
     if (longUrl.length > SHARE_URL_LIMIT) return "too-large";
     try {
       const short = await shortenUrl(longUrl);
