@@ -354,6 +354,23 @@ body {
 .mermaid-error-src {
   color: var(--ink-muted);
 }
+.mermaid-error-hint {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.8rem;
+}
+.mermaid-error-reload {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--ember);
+  border: 1px solid var(--ember-soft);
+  border-radius: 5px;
+  padding: 0.35rem 0.8rem;
+  background: transparent;
+  cursor: pointer;
+}
+.mermaid-error-reload:hover {
+  background-color: color-mix(in srgb, var(--ember) 10%, transparent);
+}
 .mermaid-stale {
   padding: 0.4rem 0.75rem;
   color: var(--ember);

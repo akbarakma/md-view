@@ -21,6 +21,17 @@ type MermaidApi = {
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
 
+// A dynamically-imported chunk can fail transiently (a network blip, or a chunk
+// briefly missing while a new build swaps in on deploy). Mermaid then aggregates a
+// failed per-diagram import as "Failed to load N external diagrams"; Turbopack's own
+// message is "Failed to load chunk …". Any of these should be retried, not shown as
+// a syntax error.
+const LOAD_ERROR_RE =
+  /chunkloaderror|loading chunk|failed to load chunk|dynamically imported module|external diagrams/i;
+function isLoadError(e: unknown): boolean {
+  return e instanceof Error && (e.name === "ChunkLoadError" || LOAD_ERROR_RE.test(e.message));
+}
+
 function loadMermaid(): Promise<MermaidApi> {
   if (!mermaidPromise) {
     mermaidPromise = import("mermaid").then((mod) => {
@@ -54,6 +65,13 @@ function loadMermaid(): Promise<MermaidApi> {
         sequence: { useMaxWidth: false },
       });
       return mermaid;
+    })
+    .catch((e) => {
+      // Otherwise a failed import stays cached as a rejected promise forever and
+      // every later diagram is broken until a full reload. Drop it so the next
+      // attempt re-imports.
+      mermaidPromise = null;
+      throw e;
     });
   }
   return mermaidPromise;
@@ -338,6 +356,7 @@ function MermaidDiagramImpl({ code }: { code: string }) {
   const [inView, setInView] = useState(false);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   // Only render once the block scrolls near the viewport.
@@ -363,16 +382,37 @@ function MermaidDiagramImpl({ code }: { code: string }) {
     if (!inView) return;
     let cancelled = false;
     const run = async () => {
-      try {
-        const mermaid = await loadMermaid();
-        const id = `${safeId}-${seq.current++}`;
-        const out = await mermaid.render(id, code);
-        if (!cancelled) {
+      // Mermaid lazy-loads a chunk per diagram type on first render; a transient
+      // failure on any one (network blip, or a chunk momentarily missing during a
+      // redeploy) rejects the whole render. It clears on retry, so back off and try
+      // again a couple of times before surfacing an error.
+      let sawLoadError = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const mermaid = await loadMermaid();
+          const id = `${safeId}-${seq.current++}`;
+          const out = await mermaid.render(id, code);
+          if (cancelled) return;
           setSvg(out.svg);
           setError(null);
+          setLoadFailed(false);
+          return;
+        } catch (e) {
+          if (cancelled) return;
+          if (isLoadError(e)) sawLoadError = true;
+          if (isLoadError(e) && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+            if (cancelled) return;
+            continue;
+          }
+          setError(e instanceof Error ? e.message : String(e));
+          // A failed diagram-type load can leave mermaid unable to detect the type on
+          // the next try (it drops the detector), so the final error may not look like
+          // a chunk error — remember that a load failure happened and show the reload
+          // path, not the syntax-error view.
+          setLoadFailed(sawLoadError);
+          return;
         }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
     };
     const hasPrevious = svg !== "";
@@ -417,9 +457,27 @@ function MermaidDiagramImpl({ code }: { code: string }) {
         </div>
       ) : error ? (
         <div className="mermaid-error">
-          <div className="mermaid-error-title">Couldn’t render this diagram</div>
-          <pre>{error}</pre>
-          <pre className="mermaid-error-src">{code}</pre>
+          {loadFailed ? (
+            <>
+              <div className="mermaid-error-title">Couldn’t load the diagram renderer</div>
+              <p className="mermaid-error-hint">
+                A required chunk failed to load. This usually clears on a refresh.
+              </p>
+              <button
+                type="button"
+                className="mermaid-error-reload"
+                onClick={() => window.location.reload()}
+              >
+                Reload page
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mermaid-error-title">Couldn’t render this diagram</div>
+              <pre>{error}</pre>
+              <pre className="mermaid-error-src">{code}</pre>
+            </>
+          )}
         </div>
       ) : (
         <div className="mermaid-loading">Rendering diagram…</div>
