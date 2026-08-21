@@ -191,11 +191,16 @@ function DiagramViewport({
     [zoomAt],
   );
 
-  // Non-passive wheel listener so we can preventDefault the page scroll.
+  // Zoom only while the pinch/zoom modifier is held — a macOS trackpad pinch
+  // arrives as a ctrlKey wheel, and ⌘/Ctrl+wheel covers mouse users. A plain
+  // scroll is never preventDefaulted, so it can't latch a momentum gesture to
+  // this element; without that guard, closing the modal mid-momentum wedges
+  // Chrome and freezes scrolling browser-wide until it decays or the tab reloads.
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const rect = vp.getBoundingClientRect();
       zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - rect.left, e.clientY - rect.top);
