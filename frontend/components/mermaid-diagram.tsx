@@ -89,10 +89,14 @@ type Transform = { scale: number; tx: number; ty: number };
 function DiagramViewport({
   svg,
   fullscreen = false,
+  closing = false,
+  onSettled,
   onToggleFullscreen,
 }: {
   svg: string;
   fullscreen?: boolean;
+  closing?: boolean;
+  onSettled?: () => void;
   onToggleFullscreen?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -191,15 +195,15 @@ function DiagramViewport({
     [zoomAt],
   );
 
-  // Zoom only while the pinch/zoom modifier is held — a macOS trackpad pinch
-  // arrives as a ctrlKey wheel, and ⌘/Ctrl+wheel covers mouse users. A plain
-  // scroll is never preventDefaulted, so it can't latch a momentum gesture to
-  // this element; without that guard, closing the modal mid-momentum wedges
-  // Chrome and freezes scrolling browser-wide until it decays or the tab reloads.
+  // Record every wheel tick (the deferred close below reads it) and zoom only
+  // while the pinch/zoom modifier is held — a macOS trackpad pinch arrives as a
+  // ctrlKey wheel, and ⌘/Ctrl+wheel covers mouse users.
+  const lastWheelAt = useRef(0);
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
     const onWheel = (e: WheelEvent) => {
+      lastWheelAt.current = performance.now();
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const rect = vp.getBoundingClientRect();
@@ -208,6 +212,29 @@ function DiagramViewport({
     vp.addEventListener("wheel", onWheel, { passive: false });
     return () => vp.removeEventListener("wheel", onWheel);
   }, [zoomAt]);
+
+  // Defer the actual unmount until the trackpad's momentum wheel stream goes quiet.
+  // Removing this element mid-momentum strands Chrome's scroll latch and freezes
+  // scrolling browser-wide (every tab) until the gesture decays or the tab reloads;
+  // holding it in the DOM until wheel events stop lets the gesture end cleanly. When
+  // nothing was scrolling it settles on the first check, so a plain close is instant.
+  useEffect(() => {
+    if (!closing) return;
+    const cap = performance.now() + 2500;
+    let timer: number | undefined;
+    const check = () => {
+      const now = performance.now();
+      if (now - lastWheelAt.current >= 260 || now >= cap) {
+        onSettled?.();
+        return;
+      }
+      timer = window.setTimeout(check, 60);
+    };
+    check();
+    return () => {
+      if (timer != null) clearTimeout(timer);
+    };
+  }, [closing, onSettled]);
 
   // Cancel any pending frame / timer on unmount.
   useEffect(
@@ -363,6 +390,15 @@ function MermaidDiagramImpl({ code }: { code: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // A close request hides the modal but keeps the viewport mounted until its wheel
+  // stream settles (see DiagramViewport), so a mid-zoom close can't strand Chrome's
+  // scroll latch and freeze the browser.
+  const [closing, setClosing] = useState(false);
+  const requestClose = useCallback(() => setClosing(true), []);
+  const finishClose = useCallback(() => {
+    setExpanded(false);
+    setClosing(false);
+  }, []);
 
   // Only render once the block scrolls near the viewport.
   useEffect(() => {
@@ -442,11 +478,11 @@ function MermaidDiagramImpl({ code }: { code: string }) {
   useEffect(() => {
     if (!expanded) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setExpanded(false);
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [expanded]);
+  }, [expanded, requestClose]);
 
   return (
     <div ref={boxRef} className="mermaid-block not-prose">
@@ -454,7 +490,15 @@ function MermaidDiagramImpl({ code }: { code: string }) {
         <div className="mermaid-static-wrap">
           <div ref={staticRef} className="mermaid-static" dangerouslySetInnerHTML={{ __html: svg }} />
           <div className="mermaid-controls">
-            <button type="button" title="Full screen" aria-label="Full screen" onClick={() => setExpanded(true)}>
+            <button
+              type="button"
+              title="Full screen"
+              aria-label="Full screen"
+              onClick={() => {
+                setClosing(false);
+                setExpanded(true);
+              }}
+            >
               ⛶
             </button>
           </div>
@@ -489,9 +533,21 @@ function MermaidDiagramImpl({ code }: { code: string }) {
       )}
 
       {expanded && svg && (
-        <div className="mermaid-modal" role="dialog" aria-modal="true" onClick={() => setExpanded(false)}>
+        <div
+          className="mermaid-modal"
+          role="dialog"
+          aria-modal="true"
+          style={closing ? { opacity: 0 } : undefined}
+          onClick={requestClose}
+        >
           <div className="mermaid-modal-inner" onClick={(e) => e.stopPropagation()}>
-            <DiagramViewport svg={svg} fullscreen onToggleFullscreen={() => setExpanded(false)} />
+            <DiagramViewport
+              svg={svg}
+              fullscreen
+              closing={closing}
+              onSettled={finishClose}
+              onToggleFullscreen={requestClose}
+            />
           </div>
         </div>
       )}
