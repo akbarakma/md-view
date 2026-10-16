@@ -357,3 +357,19 @@ Code review should flag this on first read. Don't merge it.
 ## 9. Transactional Limit Checks
 
 When an endpoint enforces a per-parent quota before inserting a child row, serialize the check and insert in the same database transaction. Lock the parent row with `SELECT ... FOR UPDATE` (SQLAlchemy: `.with_for_update()`), then count the active child rows and insert before committing. Do not enforce quota limits with an unlocked count followed by an insert; concurrent requests can both pass the stale count and exceed the tier limit.
+
+## 10. Agent skills
+
+`.scratch/` and `docs/agents/` are gitignored, so they exist only in this checkout. They are absent in worktrees and fresh clones.
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage state is a `Status:` line in each issue file, using the five default role names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
