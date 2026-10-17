@@ -19,9 +19,32 @@ services:
       # to this compose file — Compose substitutes it here at runtime, and
       # .dockerignore keeps it out of the image.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      DATABASE_URL: postgresql://md_view:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/md_view
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: md-view-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: md_view
+      POSTGRES_USER: md_view
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U md_view -d md_view"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

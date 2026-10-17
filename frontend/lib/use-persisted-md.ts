@@ -1,67 +1,45 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { decodeShareFromHash } from "@/lib/share-url";
 
 const STORAGE_KEY = "md-view:document";
 const DEBOUNCE_MS = 200;
 
-export function usePersistedMd(initialValue: string) {
-  const [value, setValue] = useState(initialValue);
+export function usePersistedMd(initialValue: string, sharedDoc?: string) {
+  const [value, setValue] = useState(sharedDoc ?? initialValue);
   const [hydrated, setHydrated] = useState(false);
   const timerRef = useRef<number | null>(null);
+  // Strict Mode runs mount effects twice; without this the replace prompt would show twice.
+  const loadedRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
+    if (loadedRef.current) return;
+    loadedRef.current = true;
 
-    const clearHash = () => {
-      window.history.replaceState(
-        null,
-        "",
-        window.location.pathname + window.location.search,
-      );
-    };
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // localStorage unavailable (private mode, quota, etc.) — fall back to initial
+    }
 
-    const consumeHash = async (confirmReplace: boolean): Promise<boolean> => {
-      const shared = await decodeShareFromHash(window.location.hash);
-      if (shared === null) return false;
-      if (confirmReplace) {
-        const ok = window.confirm(
-          "Load shared document? This will replace your current draft.",
-        );
-        if (!ok) {
-          clearHash();
-          return false;
-        }
+    if (sharedDoc === undefined) {
+      if (stored !== null) setValue(stored);
+    } else {
+      const hasOwnDraft = stored !== null && stored !== initialValue && stored !== sharedDoc;
+      if (
+        hasOwnDraft &&
+        !window.confirm("Load shared document? This will replace your current draft.")
+      ) {
+        // The share URL stays, so the user can save their draft and reload to open the link later.
+        setValue(stored!);
+      } else {
+        // Deferred: Next patches history.replaceState in a parent effect that runs after this one.
+        window.setTimeout(() => window.history.replaceState(null, "", "/"), 0);
       }
-      setValue(shared);
-      clearHash();
-      return true;
-    };
-
-    void (async () => {
-      const consumed = await consumeHash(false);
-      if (cancelled) return;
-      if (!consumed) {
-        try {
-          const stored = window.localStorage.getItem(STORAGE_KEY);
-          if (stored !== null) setValue(stored);
-        } catch {
-          // localStorage unavailable (private mode, quota, etc.) — fall back to initial
-        }
-      }
-      setHydrated(true);
-    })();
-
-    const onHashChange = () => {
-      void consumeHash(true);
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("hashchange", onHashChange);
-    };
-  }, []);
+    }
+    setHydrated(true);
+  }, [initialValue, sharedDoc]);
 
   useEffect(() => {
     if (!hydrated) return;
