@@ -19,7 +19,11 @@ services:
       # to this compose file — Compose substitutes it here at runtime, and
       # .dockerignore keeps it out of the image.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      DATABASE_URL: postgresql://md_view:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/md_view
+      # Separate fields, not a URL: a password with # / ? would corrupt a connection string.
+      PGHOST: postgres
+      PGUSER: md_view
+      PGDATABASE: md_view
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     depends_on:
       postgres:
         condition: service_healthy

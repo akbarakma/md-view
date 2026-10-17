@@ -2,7 +2,7 @@ import { createHash, randomInt } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { documents } from "@/lib/db/schema";
-import { allowCreate } from "@/lib/rate-limit";
+import { reserveCreate } from "@/lib/rate-limit";
 
 const SLUG_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const SLUG_LENGTH = 10;
@@ -49,11 +49,22 @@ export async function publishDocument(content: string, ip: string): Promise<stri
   const contentHash = createHash("sha256").update(content).digest("hex");
   const existing = await findLiveSlug(contentHash);
   if (existing) return existing;
-  if (!allowCreate(ip)) return null;
-  return insertDocument(content, contentHash);
+  const release = reserveCreate(ip);
+  if (!release) return null;
+  try {
+    const { slug, created } = await insertDocument(content, contentHash);
+    if (!created) release();
+    return slug;
+  } catch (err) {
+    release();
+    throw err;
+  }
 }
 
-async function insertDocument(content: string, contentHash: string): Promise<string> {
+async function insertDocument(
+  content: string,
+  contentHash: string,
+): Promise<{ slug: string; created: boolean }> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const [row] = await getDb()
@@ -64,9 +75,9 @@ async function insertDocument(content: string, contentHash: string): Promise<str
           where: sql`${documents.deletedAt} is null`,
         })
         .returning({ slug: documents.slug });
-      if (row) return row.slug;
+      if (row) return { slug: row.slug, created: true };
       const existing = await findLiveSlug(contentHash);
-      if (existing) return existing;
+      if (existing) return { slug: existing, created: false };
     } catch (err) {
       if (!isSlugCollision(err)) throw err;
     }

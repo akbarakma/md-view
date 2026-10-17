@@ -6,8 +6,12 @@ const MAX_PER_DAY = 100;
 const createsByIp = new Map<string, number[]>();
 let lastSweep = 0;
 
-/** In-memory, so it resets on every restart and assumes a single app instance. */
-export function allowCreate(ip: string): boolean {
+/**
+ * Take one create slot for this IP, or return null when it is over the limit.
+ * Call the returned release() when no document was actually created.
+ * In-memory, so it resets on every restart and assumes a single app instance.
+ */
+export function reserveCreate(ip: string): (() => void) | null {
   const now = Date.now();
   if (now - lastSweep >= HOUR_MS) {
     lastSweep = now;
@@ -18,11 +22,17 @@ export function allowCreate(ip: string): boolean {
   const key = limitKey(ip);
   const recent = (createsByIp.get(key) ?? []).filter((t) => now - t < DAY_MS);
   const lastHour = recent.filter((t) => now - t < HOUR_MS).length;
-  const allowed = recent.length < MAX_PER_DAY && lastHour < MAX_PER_HOUR;
-  if (allowed) recent.push(now);
-  if (recent.length > 0) createsByIp.set(key, recent);
-  else createsByIp.delete(key);
-  return allowed;
+  if (recent.length >= MAX_PER_DAY || lastHour >= MAX_PER_HOUR) {
+    createsByIp.set(key, recent);
+    return null;
+  }
+  recent.push(now);
+  createsByIp.set(key, recent);
+  return () => {
+    const times = createsByIp.get(key);
+    const i = times?.lastIndexOf(now) ?? -1;
+    if (times && i !== -1) times.splice(i, 1);
+  };
 }
 
 // One IPv6 user owns a whole /64, so per-address limits would be trivial to rotate past.
