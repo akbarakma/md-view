@@ -5,7 +5,7 @@ import { SiteCredit } from "@/components/site-credit";
 
 const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
 
-type ShareOutcome = "ok" | "ok-long" | "too-large" | "failed";
+type ShareOutcome = "ok" | "too-large" | "failed";
 
 type TopBarProps = {
   drawerOpen: boolean;
@@ -36,7 +36,7 @@ export function TopBar({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
   const [shareState, setShareState] = useState<
-    "idle" | "loading" | "ok" | "ok-long" | "too-large" | "err"
+    "idle" | "loading" | "ok" | "too-large" | "err"
   >("idle");
   const copyTimerRef = useRef<number | null>(null);
   const shareTimerRef = useRef<number | null>(null);
@@ -89,13 +89,7 @@ export function TopBar({
     setShareState("loading");
     const outcome = await onShare();
     setShareState(
-      outcome === "ok"
-        ? "ok"
-        : outcome === "ok-long"
-          ? "ok-long"
-          : outcome === "too-large"
-            ? "too-large"
-            : "err",
+      outcome === "ok" ? "ok" : outcome === "too-large" ? "too-large" : "err",
     );
     if (shareTimerRef.current !== null) window.clearTimeout(shareTimerRef.current);
     shareTimerRef.current = window.setTimeout(() => setShareState("idle"), 1600);
@@ -106,13 +100,11 @@ export function TopBar({
       ? "Sharing…"
       : shareState === "ok"
         ? "Link copied"
-        : shareState === "ok-long"
-          ? "Copied long link"
-          : shareState === "too-large"
-            ? "Too large"
-            : shareState === "err"
-              ? "Share failed"
-              : "Share";
+        : shareState === "too-large"
+          ? "Too large"
+          : shareState === "err"
+            ? "Share failed"
+            : "Share";
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-rule px-3 sm:px-6">
@@ -183,7 +175,7 @@ export function TopBar({
             disabled={shareState === "loading"}
             aria-live="polite"
           >
-            {shareState === "ok" || shareState === "ok-long" ? <IconCheck /> : <IconShare />}
+            {shareState === "ok" ? <IconCheck /> : <IconShare />}
           </ToolbarButton>
 
           <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-rule" />

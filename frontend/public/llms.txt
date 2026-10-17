@@ -1,0 +1,19 @@
+# md-view
+
+> md-view (https://md.akbarakma.com) is a Markdown editor and viewer. Anyone can share a Markdown document and get a public link. Shared documents never change after creation.
+
+## Read a shared document
+
+- `GET https://md.akbarakma.com/d/{id}.md` returns the raw Markdown (`text/markdown`) of the share link `https://md.akbarakma.com/d/{id}`.
+
+## Create a shared document
+
+- `POST https://md.akbarakma.com/api/documents` with JSON body `{"markdown": "# Title\n..."}` returns `{"slug", "url", "rawUrl"}`.
+- Sharing identical content again returns the same link.
+- Limits: 10 MB per request, 30 documents per hour and 100 per day for each IP.
+
+## MCP server
+
+- Streamable HTTP endpoint: `https://md.akbarakma.com/mcp` (no auth).
+- Tools: `create_document(markdown)` and `read_document(link)`.
+- Claude Code: `claude mcp add --transport http md-view https://md.akbarakma.com/mcp`
