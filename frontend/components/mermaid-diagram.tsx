@@ -41,6 +41,7 @@ function loadMermaid(): Promise<MermaidApi> {
         startOnLoad: false,
         securityLevel: "strict",
         theme: "base",
+        look: "classic",
         fontFamily: "var(--font-mono), ui-monospace, monospace",
         themeVariables: {
           fontFamily: "var(--font-mono), ui-monospace, monospace",
