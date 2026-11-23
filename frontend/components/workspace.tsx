@@ -344,10 +344,7 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
             right={
               <>
                 <PaneLabel index="02" label="Preview" hint="Rendered" />
-                <div
-                  ref={previewBoxRef}
-                  className={`flex-1 overflow-hidden ${viewMode === "preview" ? "reading-column" : ""}`}
-                >
+                <div ref={previewBoxRef} className="flex-1 overflow-hidden">
                   {preview}
                 </div>
               </>
