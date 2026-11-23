@@ -106,6 +106,8 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
 
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  // After a refused clipboard read, the next paste into the editor stands in for the button.
+  const pasteFallbackUntilRef = useRef(0);
   const showToast = useCallback((next: ToastState) => {
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     setToast(next);
@@ -221,6 +223,7 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
   const applyPaste = useCallback(
     (text: string) => {
       const previous = { md, viewMode, activePane };
+      pasteFallbackUntilRef.current = 0;
       setMd(text);
       if (isDesktop) setViewMode("preview");
       else setActivePane("preview");
@@ -256,18 +259,25 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
       textarea?.focus();
       textarea?.select();
     });
-    const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
+    pasteFallbackUntilRef.current = Date.now() + TOAST_MS;
+    // iPad Safari reports a Mac user agent, so the input type decides the hint.
+    const hasKeyboard = window.matchMedia("(pointer: fine)").matches;
+    const isMac = /Mac/.test(navigator.userAgent);
     showToast({
-      message: isDesktop
-        ? `Clipboard access is blocked. Press ${isMac ? "Cmd" : "Ctrl"}+V to paste.`
-        : "Clipboard access is blocked. Long-press the editor to paste.",
+      message: hasKeyboard
+        ? `Your browser didn't let this page read the clipboard. Press ${isMac ? "Cmd" : "Ctrl"}+V to paste instead.`
+        : "Your browser didn't let this page read the clipboard. Long-press the editor to paste instead.",
     });
   }, [applyPaste, isDesktop, viewMode, showToast]);
 
   // Text boxes keep their normal paste; anywhere else, a paste replaces the draft.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (isEditableTarget(e.target)) return;
+      const fallback =
+        Date.now() < pasteFallbackUntilRef.current &&
+        e.target instanceof Node &&
+        editorBoxRef.current?.contains(e.target) === true;
+      if (isEditableTarget(e.target) && !fallback) return;
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if (!text.trim()) return;
       e.preventDefault();
