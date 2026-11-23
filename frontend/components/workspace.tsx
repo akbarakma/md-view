@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AiChat } from "@/components/ai-chat";
 import { CheatsheetDrawer } from "@/components/cheatsheet-drawer";
 import { MarkdownEditor } from "@/components/markdown-editor";
@@ -9,13 +9,15 @@ import { PaneLabel } from "@/components/pane-label";
 import { PaneTabs, type Pane } from "@/components/pane-tabs";
 import { SearchBar, type SearchScope } from "@/components/search-bar";
 import { SplitPane } from "@/components/split-pane";
+import { Toast } from "@/components/toast";
 import { TopBar } from "@/components/top-bar";
-import { copyText } from "@/lib/clipboard";
+import { copyText, readClipboardText } from "@/lib/clipboard";
 import { findMatches } from "@/lib/find-matches";
 import { shareDocument } from "@/lib/share-document";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { usePersistedMd } from "@/lib/use-persisted-md";
+import { setViewMode, useViewMode } from "@/lib/use-view-mode";
 
 type ShareOutcome = "ok" | "too-large" | "failed";
 
@@ -58,6 +60,17 @@ function greet(name) {
 Open the **Cheat sheet** in the top-right whenever you need a reminder.
 `;
 
+const TOAST_MS = 5000;
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.closest("input, textarea, select") !== null)
+  );
+}
+
+type ToastState = { message: string; undo?: () => void };
+
 const DRAWER_ID = "cheatsheet-drawer";
 const TOGGLE_ID = "cheatsheet-toggle";
 
@@ -87,6 +100,26 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
   // Below `md` the split view is unusable, so the panes become tabs instead.
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [activePane, setActivePane] = useState<Pane>("preview");
+  const viewMode = useViewMode();
+  const editorBoxRef = useRef<HTMLDivElement | null>(null);
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const showToast = useCallback((next: ToastState) => {
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    setToast(next);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), TOAST_MS);
+  }, []);
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    setToast(null);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,9 +129,13 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const effectiveQuery = searchOpen ? debouncedQuery : "";
 
-  // On mobile only one pane is on screen, so searching the other one would be
-  // meaningless — the scope simply follows the active tab.
-  const scope: SearchScope = isDesktop ? desktopScope : activePane;
+  // When only one pane is on screen, searching the hidden one would be
+  // meaningless, so the scope follows the visible pane.
+  const scope: SearchScope = !isDesktop
+    ? activePane
+    : viewMode === "split"
+      ? desktopScope
+      : viewMode;
 
   // Only the scoped pane is highlighted; the other is handed an empty query.
   const editorQuery = scope === "editor" ? effectiveQuery : "";
@@ -181,6 +218,65 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
 
   const handleCopy = useCallback(async (): Promise<boolean> => copyText(md), [md]);
 
+  const applyPaste = useCallback(
+    (text: string) => {
+      const previous = { md, viewMode, activePane };
+      setMd(text);
+      if (isDesktop) setViewMode("preview");
+      else setActivePane("preview");
+      previewBoxRef.current?.firstElementChild?.scrollTo({ top: 0 });
+      showToast({
+        message: "Draft replaced with the pasted text.",
+        undo: () => {
+          setMd(previous.md);
+          setViewMode(previous.viewMode);
+          setActivePane(previous.activePane);
+          dismissToast();
+        },
+      });
+    },
+    [md, viewMode, activePane, isDesktop, setMd, showToast, dismissToast],
+  );
+
+  const handlePasteClick = useCallback(async () => {
+    const result = await readClipboardText();
+    if ("text" in result) {
+      applyPaste(result.text);
+      return;
+    }
+    if (result.error === "empty") {
+      showToast({ message: "Your clipboard has no text." });
+      return;
+    }
+    if (isDesktop && viewMode === "preview") setViewMode("split");
+    if (!isDesktop) setActivePane("editor");
+    // The editor is unhidden by the state change above, so focus waits a frame.
+    window.requestAnimationFrame(() => {
+      const textarea = editorBoxRef.current?.querySelector("textarea");
+      textarea?.focus();
+      textarea?.select();
+    });
+    const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
+    showToast({
+      message: isDesktop
+        ? `Clipboard access is blocked. Press ${isMac ? "Cmd" : "Ctrl"}+V to paste.`
+        : "Clipboard access is blocked. Long-press the editor to paste.",
+    });
+  }, [applyPaste, isDesktop, viewMode, showToast]);
+
+  // Text boxes keep their normal paste; anywhere else, a paste replaces the draft.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (isEditableTarget(e.target)) return;
+      const text = e.clipboardData?.getData("text/plain") ?? "";
+      if (!text.trim()) return;
+      e.preventDefault();
+      applyPaste(text);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [applyPaste]);
+
   // The cheat sheet and the chat both occupy the right edge — only one at a time.
   const openChat = useCallback(() => {
     setDrawerOpen(false);
@@ -215,6 +311,9 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
         onExport={handleExport}
         onCopy={handleCopy}
         onShare={handleShare}
+        onPaste={handlePasteClick}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
       <main className="relative flex-1 overflow-hidden">
         {searchOpen && (
@@ -225,7 +324,7 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
             current={matchCount > 0 ? safeActive + 1 : 0}
             scope={scope}
             onScopeChange={setDesktopScope}
-            showScopeToggle={isDesktop}
+            showScopeToggle={isDesktop && viewMode === "split"}
             onNext={goNext}
             onPrev={goPrev}
             onClose={closeSearch}
@@ -233,16 +332,24 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
         )}
         {isDesktop ? (
           <SplitPane
+            hidden={viewMode === "editor" ? "right" : viewMode === "preview" ? "left" : undefined}
             left={
               <>
                 <PaneLabel index="01" label="Editor" hint="Plain Markdown" />
-                <div className="flex-1 overflow-hidden">{editor}</div>
+                <div ref={editorBoxRef} className="flex-1 overflow-hidden">
+                  {editor}
+                </div>
               </>
             }
             right={
               <>
                 <PaneLabel index="02" label="Preview" hint="Rendered" />
-                <div className="flex-1 overflow-hidden">{preview}</div>
+                <div
+                  ref={previewBoxRef}
+                  className={`flex-1 overflow-hidden ${viewMode === "preview" ? "reading-column" : ""}`}
+                >
+                  {preview}
+                </div>
               </>
             }
           />
@@ -256,6 +363,7 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
               id="pane-panel-editor"
               aria-labelledby="pane-tab-editor"
               hidden={activePane !== "editor"}
+              ref={editorBoxRef}
               className="flex-1 overflow-hidden"
             >
               {editor}
@@ -265,6 +373,7 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
               id="pane-panel-preview"
               aria-labelledby="pane-tab-preview"
               hidden={activePane !== "preview"}
+              ref={previewBoxRef}
               className="flex-1 overflow-hidden"
             >
               {preview}
@@ -278,6 +387,13 @@ export function Workspace({ sharedDoc }: { sharedDoc?: string }) {
         drawerId={DRAWER_ID}
         toggleId={TOGGLE_ID}
       />
+      {toast && (
+        <Toast
+          message={toast.message}
+          actionLabel={toast.undo ? "Undo" : undefined}
+          onAction={toast.undo}
+        />
+      )}
       <AiChat doc={md} open={chatOpen} onOpen={openChat} onClose={() => setChatOpen(false)} />
     </div>
   );

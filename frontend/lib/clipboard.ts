@@ -22,3 +22,14 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 }
+
+export type ClipboardRead = { text: string } | { error: "blocked" | "empty" };
+
+export async function readClipboardText(): Promise<ClipboardRead> {
+  try {
+    const text = await navigator.clipboard.readText();
+    return text.trim() ? { text } : { error: "empty" };
+  } catch {
+    return { error: "blocked" };
+  }
+}

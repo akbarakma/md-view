@@ -15,6 +15,7 @@ const SAVE_DEBOUNCE_MS = 150;
 type SplitPaneProps = {
   left: ReactNode;
   right: ReactNode;
+  hidden?: "left" | "right";
 };
 
 function isValidLayout(value: unknown): value is Layout {
@@ -23,7 +24,7 @@ function isValidLayout(value: unknown): value is Layout {
   return typeof obj.left === "number" && typeof obj.right === "number";
 }
 
-export function SplitPane({ left, right }: SplitPaneProps) {
+export function SplitPane({ left, right, hidden }: SplitPaneProps) {
   const groupRef = useGroupRef();
   const saveTimerRef = useRef<number | null>(null);
 
@@ -62,11 +63,25 @@ export function SplitPane({ left, right }: SplitPaneProps) {
       groupRef={groupRef}
       onLayoutChanged={handleLayoutChanged}
     >
-      <Panel id="left" defaultSize={50} minSize={20} className="flex flex-col h-full">
+      {/* Hidden with CSS, not unmounted, so the saved layout survives and the
+          preview never re-renders its mermaid diagrams on a mode switch. */}
+      <Panel
+        id="left"
+        defaultSize={50}
+        minSize={20}
+        className="flex flex-col h-full"
+        data-pane-hidden={hidden === "left" || undefined}
+      >
         {left}
       </Panel>
-      <Separator className="resize-handle" />
-      <Panel id="right" defaultSize={50} minSize={20} className="flex flex-col h-full">
+      <Separator className="resize-handle" data-pane-hidden={hidden ? true : undefined} />
+      <Panel
+        id="right"
+        defaultSize={50}
+        minSize={20}
+        className="flex flex-col h-full"
+        data-pane-hidden={hidden === "right" || undefined}
+      >
         {right}
       </Panel>
     </Group>

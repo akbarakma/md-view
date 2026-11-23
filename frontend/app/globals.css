@@ -71,6 +71,23 @@ body {
   outline-offset: 4px;
 }
 
+/* !important beats the inline display the panel library sets. The panel left
+   visible keeps its flex-grow, and as the only item it fills the row. */
+[data-pane-hidden] {
+  display: none !important;
+}
+
+/* Preview-only mode: text keeps a reading width of about 70 characters, while
+   tables, code and diagrams get more room. rem, not ch: ch grows with each
+   heading's font size. */
+.reading-column .prose-paper > * {
+  max-width: 44rem;
+  margin-inline: auto;
+}
+.reading-column .prose-paper > :is(table, pre, .mermaid-block) {
+  max-width: 1100px;
+}
+
 /* Preview prose tuning */
 .prose-paper {
   --tw-prose-body: var(--ink-soft);

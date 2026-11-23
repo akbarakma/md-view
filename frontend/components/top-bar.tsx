@@ -2,10 +2,17 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SiteCredit } from "@/components/site-credit";
+import type { ViewMode } from "@/lib/use-view-mode";
 
 const MD_ACCEPT = ".md,.markdown,.mdown,.mkd,text/markdown,text/plain";
 
 type ShareOutcome = "ok" | "too-large" | "failed";
+
+const VIEW_MODES: { id: ViewMode; label: string }[] = [
+  { id: "editor", label: "Editor" },
+  { id: "split", label: "Split" },
+  { id: "preview", label: "Preview" },
+];
 
 type TopBarProps = {
   drawerOpen: boolean;
@@ -18,6 +25,9 @@ type TopBarProps = {
   onExport: () => void;
   onCopy: () => Promise<boolean> | boolean;
   onShare: () => Promise<ShareOutcome> | ShareOutcome;
+  onPaste: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
 };
 
 export function TopBar({
@@ -31,6 +41,9 @@ export function TopBar({
   onExport,
   onCopy,
   onShare,
+  onPaste,
+  viewMode,
+  onViewModeChange,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -126,7 +139,7 @@ export function TopBar({
         <div
           ref={toolbarRef}
           aria-label="Toolbar actions. Swipe left to access more actions."
-          className="toolbar-scroll flex overflow-x-auto sm:overflow-visible"
+          className="toolbar-scroll flex overflow-x-auto md:overflow-visible"
         >
           {/* `ml-auto` right-aligns the group when it fits, and collapses to 0
               when it doesn't — so on a narrow screen the row simply overflows
@@ -143,19 +156,49 @@ export function TopBar({
             tabIndex={-1}
           />
 
+          <ToolbarButton onClick={onPaste} label="Paste" tone="primary">
+            <IconPaste />
+          </ToolbarButton>
+
+          <div
+            role="group"
+            aria-label="View"
+            className="hidden shrink-0 items-center rounded-full border border-rule p-0.5 md:inline-flex"
+          >
+            {VIEW_MODES.map((mode) => {
+              const active = mode.id === viewMode;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onViewModeChange(mode.id)}
+                  className={`inline-flex h-7 cursor-pointer items-center rounded-full px-3 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors md:max-xl:px-2 md:max-xl:tracking-[0.1em] duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember ${
+                    active ? "bg-ink text-paper" : "text-ink-soft hover:text-ember"
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-rule md:block" />
+
           <ToolbarButton
             onClick={onToggleSearch}
             label="Search"
             tone={searchOpen ? "ember" : "default"}
+            compact
           >
             <IconSearch />
           </ToolbarButton>
 
-          <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Import">
+          <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Import" compact>
             <IconUpload />
           </ToolbarButton>
 
-          <ToolbarButton onClick={onExport} label="Export">
+          <ToolbarButton onClick={onExport} label="Export" compact>
             <IconDownload />
           </ToolbarButton>
 
@@ -164,6 +207,7 @@ export function TopBar({
             label={copyState === "ok" ? "Copied" : copyState === "err" ? "Copy failed" : "Copy"}
             tone={copyState === "ok" ? "ember" : copyState === "err" ? "ember" : "default"}
             aria-live="polite"
+            compact
           >
             {copyState === "ok" ? <IconCheck /> : <IconCopy />}
           </ToolbarButton>
@@ -174,6 +218,7 @@ export function TopBar({
             tone={shareState === "idle" ? "default" : "ember"}
             disabled={shareState === "loading"}
             aria-live="polite"
+            compact
           >
             {shareState === "ok" ? <IconCheck /> : <IconShare />}
           </ToolbarButton>
@@ -186,13 +231,19 @@ export function TopBar({
             onClick={onToggleDrawer}
             aria-expanded={drawerOpen}
             aria-controls={drawerId}
-            className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-rule px-4 py-1.5 text-[12px] font-medium uppercase tracking-[0.18em] text-ink-soft transition-colors duration-150 ease-out hover:border-ember hover:text-ember focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember"
+            title="Cheat sheet"
+            className="group inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember md:max-xl:-ml-1.5 md:max-xl:size-10"
           >
-            <span
-              aria-hidden
-              className="size-1.5 rounded-full bg-ink-muted transition-colors duration-150 group-hover:bg-ember"
-            />
-            Cheat sheet
+            <span className="inline-flex items-center justify-center gap-2 rounded-full border border-rule px-4 py-1.5 text-[12px] font-medium uppercase tracking-[0.18em] text-ink-soft transition-colors duration-150 ease-out group-hover:border-ember group-hover:text-ember md:max-xl:size-7 md:max-xl:p-0">
+              <span
+                aria-hidden
+                className="size-1.5 rounded-full bg-ink-muted transition-colors duration-150 group-hover:bg-ember md:max-xl:hidden"
+              />
+              <span aria-hidden className="hidden size-3.5 place-items-center md:max-xl:grid">
+                <IconBook />
+              </span>
+              <span className="md:max-xl:sr-only">Cheat sheet</span>
+            </span>
           </button>
           </div>
         </div>
@@ -204,8 +255,10 @@ export function TopBar({
 type ToolbarButtonProps = {
   onClick: () => void;
   label: string;
-  tone?: "default" | "ember";
+  tone?: "default" | "ember" | "primary";
   disabled?: boolean;
+  /** From 768px to 1279px the label hides, leaving a 40px icon button with a tooltip. */
+  compact?: boolean;
   children: React.ReactNode;
   "aria-live"?: "polite" | "off" | "assertive";
 };
@@ -215,26 +268,57 @@ function ToolbarButton({
   label,
   tone = "default",
   disabled = false,
+  compact = false,
   children,
   ...rest
 }: ToolbarButtonProps) {
   const toneClass =
-    tone === "ember"
-      ? "border-ember text-ember"
-      : "border-rule text-ink-soft hover:border-ember hover:text-ember";
+    tone === "primary"
+      ? "border-ember bg-ember font-semibold text-paper group-hover:border-ember-soft group-hover:bg-ember-soft"
+      : tone === "ember"
+        ? "border-ember text-ember"
+        : "border-rule text-ink-soft group-hover:border-ember group-hover:text-ember";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember disabled:opacity-60 ${toneClass}`}
+      title={compact ? label : undefined}
+      className={`group inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember disabled:cursor-not-allowed disabled:opacity-60 ${
+        compact ? "md:max-xl:-mx-1.5 md:max-xl:size-10" : ""
+      }`}
       {...rest}
     >
-      <span aria-hidden className="grid size-3.5 place-items-center">
-        {children}
+      <span
+        className={`inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors duration-150 ease-out ${toneClass} ${
+          compact ? "md:max-xl:size-7 md:max-xl:p-0" : ""
+        }`}
+      >
+        <span aria-hidden className="grid size-3.5 place-items-center">
+          {children}
+        </span>
+        <span className={compact ? "md:max-xl:sr-only" : undefined}>{label}</span>
       </span>
-      {label}
     </button>
+  );
+}
+
+function IconBook() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <path d="M2.5 2.5h3.2A1.3 1.3 0 0 1 7 3.8v8a1 1 0 0 0-1-1H2.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M11.5 2.5H8.3A1.3 1.3 0 0 0 7 3.8v8a1 1 0 0 1 1-1h3.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconPaste() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <rect x="2.5" y="2.5" width="9" height="10" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5 2.5V2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M5 7h4M5 9.5h2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
   );
 }
 
